@@ -1,11 +1,9 @@
 --[[
     DataStoreModule.lua (ServerScriptService)
-    Robust persistent storage for Chronos Vault with:
-    - Multi-stat tracking (Eggs, TotalEggs, Speed, Multiplier, Jump, Magnet)
-    - pcall wrapping + exponential backoff
-    - UpdateAsync safe cloud concurrency
-    - BindToClose parallel shutdown saving
-    - Periodic auto-save loop
+    Robust data persistence for Chronos Vault:
+    - Stores Eggs, TotalEggs, SpeedLevel, BackpackLevel, MultiplierLevel, JumpLevel
+    - Exponential backoff retries & UpdateAsync concurrency safety
+    - Auto-save + BindToClose safe shutdown handling
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -17,25 +15,19 @@ local Config = require(game.ReplicatedStorage.Shared.Config)
 local DataStore = DataStoreService:GetDataStore(Config.DATA_STORE_NAME)
 
 local DataModule = {}
-
--- In-memory cache: [userId] = PlayerData
 local playerCache = {}
 
-------------------------------------------------------------
--- DEFAULTS
-------------------------------------------------------------
 local function getDefaultData()
 	return {
 		Eggs            = 0,
 		TotalEggs       = 0,
 		SpeedLevel      = 0,
+		BackpackLevel   = 0,
 		MultiplierLevel = 0,
 		JumpLevel       = 0,
-		MagnetLevel     = 0,
 	}
 end
 
--- Reconcile loaded data with default fields (in case new upgrades were added)
 local function reconcile(loaded)
 	local defaults = getDefaultData()
 	if type(loaded) ~= "table" then
@@ -49,9 +41,6 @@ local function reconcile(loaded)
 	return loaded
 end
 
-------------------------------------------------------------
--- RETRY HELPERS
-------------------------------------------------------------
 local function safeGet(key)
 	local attempts = 0
 	local success, result
@@ -61,7 +50,7 @@ local function safeGet(key)
 			return DataStore:GetAsync(key)
 		end)
 		if not success then
-			warn("[DataModule] GetAsync failed (attempt " .. attempts .. "): " .. tostring(result))
+			warn("[DataModule] GetAsync retry " .. attempts .. ": " .. tostring(result))
 			task.wait(2 ^ attempts)
 		end
 	until success or attempts >= 4
@@ -79,27 +68,21 @@ local function safeSave(key, data)
 			end)
 		end)
 		if not success then
-			warn("[DataModule] UpdateAsync failed (attempt " .. attempts .. "): " .. tostring(err))
+			warn("[DataModule] UpdateAsync retry " .. attempts .. ": " .. tostring(err))
 			task.wait(2 ^ attempts)
 		end
 	until success or attempts >= 4
 	return success
 end
 
-------------------------------------------------------------
--- PUBLIC METHODS
-------------------------------------------------------------
-
 function DataModule.Load(player: Player)
 	local key = tostring(player.UserId)
 	local success, data = safeGet(key)
-
 	if success and data then
 		playerCache[player.UserId] = reconcile(data)
 	else
 		playerCache[player.UserId] = getDefaultData()
 	end
-
 	return playerCache[player.UserId]
 end
 
@@ -132,44 +115,32 @@ end
 function DataModule.Save(player: Player)
 	local data = playerCache[player.UserId]
 	if not data then return end
-	local key = tostring(player.UserId)
-	safeSave(key, data)
+	safeSave(tostring(player.UserId), data)
 end
 
 function DataModule.RemoveCache(player: Player)
 	playerCache[player.UserId] = nil
 end
 
-------------------------------------------------------------
--- AUTO-SAVE LOOP
-------------------------------------------------------------
 task.spawn(function()
 	while true do
 		task.wait(Config.AUTO_SAVE_INTERVAL)
-		for _, player in ipairs(Players:GetPlayers()) do
-			task.spawn(function()
-				DataModule.Save(player)
-			end)
+		for _, p in ipairs(Players:GetPlayers()) do
+			task.spawn(function() DataModule.Save(p) end)
 		end
 	end
 end)
 
-------------------------------------------------------------
--- SHUTDOWN SAVE (BindToClose)
-------------------------------------------------------------
 game:BindToClose(function()
 	if RunService:IsStudio() then
 		task.wait(2)
 		return
 	end
-
 	local threads = {}
-	for _, player in ipairs(Players:GetPlayers()) do
-		table.insert(threads, task.spawn(function()
-			DataModule.Save(player)
-		end))
+	for _, p in ipairs(Players:GetPlayers()) do
+		table.insert(threads, task.spawn(function() DataModule.Save(p) end))
 	end
-	task.wait(10)
+	task.wait(8)
 end)
 
 return DataModule

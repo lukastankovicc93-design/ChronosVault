@@ -1,13 +1,12 @@
 --[[
     MapBuilder.server.lua (ServerScriptService)
-    Procedurally builds the entire Chronos Vault environment on startup:
-    - Lobby / Safe Zone with SpawnLocations
-    - 2 Physical Interactive Shops: "⚡ Speed Lab" & "💎 Vault Perks"
-    - ProximityPrompts & Step-on Touch Pads for shops
-    - Cyber-bridge with warning gates
-    - Chronos Vault Arena with central vault dais, 4 energy pillars, corner towers
-    - Kinetic Bounce Pads for high-speed parkour escapes
-    - Forcefield perimeter walls
+    Architectural Map Construction:
+    - Stylized Cyber Lobby with Spawns, Cyber-Pillars & Lighting
+    - The Great Deposit Vault (Physical bank where players secure stolen eggs)
+    - 2 Styled Cyber Kiosks with 3D spinning holograms above roofs (Speed Lab & Perks)
+    - Floating Arena Platforms, Ramps, and Elevated Core Vault Dais
+    - Glowing Cyber Crystals & Energy Conduits
+    - Kinetic Bounce Pads with sound and directional boost
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,16 +15,21 @@ local Players           = game:GetService("Players")
 
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
--- Ensure OpenShop RemoteEvent exists
-local OpenShopEvent = ReplicatedStorage:FindFirstChild("OpenShop")
-if not OpenShopEvent then
-	OpenShopEvent = Instance.new("RemoteEvent")
-	OpenShopEvent.Name = "OpenShop"
-	OpenShopEvent.Parent = ReplicatedStorage
+-- Remote Events
+local function getOrCreateRemote(name)
+	local r = ReplicatedStorage:FindFirstChild(name)
+	if not r then
+		r = Instance.new("RemoteEvent")
+		r.Name = name
+		r.Parent = ReplicatedStorage
+	end
+	return r
 end
 
+local OpenShopEvent = getOrCreateRemote("OpenShop")
+
 ------------------------------------------------------------
--- CLEANUP PREVIOUS MAP (if hot reloading)
+-- CLEANUP
 ------------------------------------------------------------
 if workspace:FindFirstChild("ChronosMap") then
 	workspace.ChronosMap:Destroy()
@@ -35,145 +39,251 @@ local mapFolder = Instance.new("Folder")
 mapFolder.Name = "ChronosMap"
 mapFolder.Parent = workspace
 
-local shopsFolder = Instance.new("Folder")
-shopsFolder.Name = "Shops"
-shopsFolder.Parent = mapFolder
+local arenaFolder = Instance.new("Folder")
+arenaFolder.Name = "Arena"
+arenaFolder.Parent = mapFolder
 
-local padsFolder = Instance.new("Folder")
-padsFolder.Name = "JumpPads"
-padsFolder.Parent = mapFolder
+local lobbyFolder = Instance.new("Folder")
+lobbyFolder.Name = "Lobby"
+lobbyFolder.Parent = mapFolder
+
+local propsFolder = Instance.new("Folder")
+propsFolder.Name = "Props"
+propsFolder.Parent = mapFolder
 
 ------------------------------------------------------------
--- HELPER BUILDERS
+-- PRIMITIVE BUILDER UTILITIES
 ------------------------------------------------------------
-local function createPart(name, size, cframe, color, material, parent, canCollide, transparency)
+local function makePart(props)
 	local p = Instance.new("Part")
-	p.Name = name
-	p.Size = size
-	p.CFrame = cframe
-	p.Color = color or Color3.fromRGB(60, 60, 70)
-	p.Material = material or Enum.Material.SmoothPlastic
+	p.Name = props.Name or "Part"
+	p.Size = props.Size or Vector3.new(4, 1, 4)
+	p.CFrame = props.CFrame or CFrame.new(0, 0, 0)
+	p.Color = props.Color or Color3.fromRGB(40, 44, 60)
+	p.Material = props.Material or Enum.Material.SmoothPlastic
 	p.Anchored = true
-	p.CanCollide = (canCollide ~= false)
-	p.Transparency = transparency or 0
+	p.CanCollide = (props.CanCollide ~= false)
+	p.Transparency = props.Transparency or 0
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Parent = parent or mapFolder
+	p.Parent = props.Parent or mapFolder
 	return p
 end
 
 ------------------------------------------------------------
--- 1. LOBBY / SAFE ZONE
+-- 1. LOBBY & THE GREAT DEPOSIT VAULT
 ------------------------------------------------------------
 local lobbyPos = Config.LOBBY_CENTER
-local lobbySize = Config.LOBBY_SIZE
 
--- Main lobby floor
-local lobbyFloor = createPart(
-	"LobbyFloor",
-	lobbySize,
-	CFrame.new(lobbyPos),
-	Color3.fromRGB(24, 28, 44),
-	Enum.Material.Slate,
-	mapFolder
-)
+-- Main Lobby Floor (Polished slate with dark cyan cyber tint)
+local lobbyFloor = makePart({
+	Name = "LobbyFloor",
+	Size = Vector3.new(100, 4, 70),
+	CFrame = CFrame.new(lobbyPos),
+	Color = Color3.fromRGB(20, 24, 38),
+	Material = Enum.Material.Slate,
+	Parent = lobbyFolder,
+})
 
--- Neon glowing border around lobby
-local borderThickness = 1.5
-createPart("LobbyBorderN", Vector3.new(lobbySize.X, 2, borderThickness), CFrame.new(lobbyPos + Vector3.new(0, 2.5, -lobbySize.Z/2)), Color3.fromRGB(0, 230, 255), Enum.Material.Neon, mapFolder)
-createPart("LobbyBorderE", Vector3.new(borderThickness, 2, lobbySize.Z), CFrame.new(lobbyPos + Vector3.new(lobbySize.X/2, 2.5, 0)), Color3.fromRGB(0, 230, 255), Enum.Material.Neon, mapFolder)
-createPart("LobbyBorderW", Vector3.new(borderThickness, 2, lobbySize.Z), CFrame.new(lobbyPos + Vector3.new(-lobbySize.X/2, 2.5, 0)), Color3.fromRGB(0, 230, 255), Enum.Material.Neon, mapFolder)
+-- Glowing Grid Lines on Lobby Floor
+for x = -40, 40, 20 do
+	makePart({
+		Name = "LobbyGridLineX",
+		Size = Vector3.new(0.6, 0.1, 70),
+		CFrame = CFrame.new(lobbyPos.X + x, lobbyPos.Y + 2.05, lobbyPos.Z),
+		Color = Color3.fromRGB(0, 180, 255),
+		Material = Enum.Material.Neon,
+		Transparency = 0.3,
+		Parent = lobbyFolder,
+	})
+end
 
--- SpawnLocations
+-- Lobby Safety Guardrails
+makePart({ Name = "RailN", Size = Vector3.new(100, 3, 1), CFrame = CFrame.new(lobbyPos + Vector3.new(0, 3.5, -35)), Color = Color3.fromRGB(0, 220, 255), Material = Enum.Material.Neon, Parent = lobbyFolder })
+makePart({ Name = "RailW", Size = Vector3.new(1, 3, 70),  CFrame = CFrame.new(lobbyPos + Vector3.new(-50, 3.5, 0)), Color = Color3.fromRGB(0, 220, 255), Material = Enum.Material.Neon, Parent = lobbyFolder })
+makePart({ Name = "RailE", Size = Vector3.new(1, 3, 70),  CFrame = CFrame.new(lobbyPos + Vector3.new(50, 3.5, 0)),  Color = Color3.fromRGB(0, 220, 255), Material = Enum.Material.Neon, Parent = lobbyFolder })
+
+-- Spawns (Neutral & Anchored)
 for i = -1, 1 do
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "LobbySpawn_" .. (i + 2)
-	spawn.Size = Vector3.new(6, 1, 6)
-	spawn.Position = lobbyPos + Vector3.new(i * 12, 2.5, 5)
+	spawn.Size = Vector3.new(8, 0.8, 8)
+	spawn.Position = lobbyPos + Vector3.new(i * 16, 2.4, -18)
 	spawn.Color = Color3.fromRGB(0, 200, 255)
 	spawn.Material = Enum.Material.Neon
 	spawn.Neutral = true
 	spawn.Anchored = true
 	spawn.CanCollide = true
 	spawn.Duration = 0
-	spawn.Parent = mapFolder
+	spawn.Parent = lobbyFolder
 end
 
--- Welcome Archway / Billboard
-local archPoleL = createPart("ArchL", Vector3.new(2, 14, 2), CFrame.new(lobbyPos + Vector3.new(-18, 9, 20)), Color3.fromRGB(40, 45, 65), Enum.Material.Metal)
-local archPoleR = createPart("ArchR", Vector3.new(2, 14, 2), CFrame.new(lobbyPos + Vector3.new(18, 9, 20)), Color3.fromRGB(40, 45, 65), Enum.Material.Metal)
-local archBeam  = createPart("ArchTop", Vector3.new(38, 3, 2), CFrame.new(lobbyPos + Vector3.new(0, 16.5, 20)), Color3.fromRGB(0, 220, 255), Enum.Material.Neon)
+------------------------------------------------------------
+-- THE DEPOSIT VAULT BANK (Center of Lobby)
+------------------------------------------------------------
+local bankPos = Config.VAULT_DEPOSIT_POS
 
-local titleGui = Instance.new("BillboardGui")
-titleGui.Name = "WelcomeTitle"
-titleGui.Size = UDim2.new(0, 500, 0, 90)
-titleGui.StudsOffset = Vector3.new(0, 2.5, 0)
-titleGui.AlwaysOnTop = true
-titleGui.Adornee = archBeam
-titleGui.Parent = archBeam
+-- Bank circular dais
+local bankBase = makePart({
+	Name = "BankBase",
+	Size = Vector3.new(22, 2.5, 22),
+	CFrame = CFrame.new(bankPos),
+	Color = Color3.fromRGB(30, 35, 55),
+	Material = Enum.Material.Metal,
+	Parent = lobbyFolder,
+})
+bankBase.Shape = Enum.PartType.Cylinder
+bankBase.CFrame = CFrame.new(bankPos) * CFrame.Angles(0, 0, math.rad(90))
 
-local titleLbl = Instance.new("TextLabel")
-titleLbl.Size = UDim2.new(1, 0, 0.6, 0)
-titleLbl.BackgroundTransparency = 1
-titleLbl.TextColor3 = Color3.fromRGB(0, 240, 255)
-titleLbl.Font = Enum.Font.GothamBlack
-titleLbl.TextScaled = true
-titleLbl.Text = "🏛️ CHRONOS VAULT"
-titleLbl.Parent = titleGui
+-- Glowing gold deposit ring
+local depositRing = makePart({
+	Name = "DepositPad",
+	Size = Vector3.new(18, 0.4, 18),
+	CFrame = CFrame.new(bankPos + Vector3.new(0, 1.4, 0)),
+	Color = Color3.fromRGB(255, 215, 0),
+	Material = Enum.Material.Neon,
+	Parent = lobbyFolder,
+})
 
-local subLbl = Instance.new("TextLabel")
-subLbl.Size = UDim2.new(1, 0, 0.4, 0)
-subLbl.Position = UDim2.new(0, 0, 0.6, 0)
-subLbl.BackgroundTransparency = 1
-subLbl.TextColor3 = Color3.fromRGB(255, 215, 0)
-subLbl.Font = Enum.Font.GothamMedium
-subLbl.TextScaled = true
-subLbl.Text = "Steal Eggs • Visit Shops • Upgrade Speed & Perks!"
-subLbl.Parent = titleGui
+-- Golden Particle Sparkles
+local sparkles = Instance.new("ParticleEmitter")
+sparkles.Name = "DepositSparkles"
+sparkles.Color = ColorSequence.new(Color3.fromRGB(255, 230, 50), Color3.fromRGB(255, 120, 0))
+sparkles.Size = NumberSequence.new(0.6, 0.2)
+sparkles.Lifetime = NumberRange.new(1.2, 2.0)
+sparkles.Rate = 25
+sparkles.Speed = NumberRange.new(4, 9)
+sparkles.SpreadAngle = Vector2.new(30, 30)
+sparkles.VelocitySpread = 30
+sparkles.Parent = depositRing
+
+-- 3D Hologram Floating Sign above Bank
+local bankSignPart = makePart({
+	Name = "BankHologramPart",
+	Size = Vector3.new(1, 1, 1),
+	CFrame = CFrame.new(bankPos + Vector3.new(0, 10, 0)),
+	Transparency = 1,
+	CanCollide = false,
+	Parent = lobbyFolder,
+})
+
+local bankGui = Instance.new("BillboardGui")
+bankGui.Size = UDim2.new(0, 350, 0, 90)
+bankGui.StudsOffset = Vector3.new(0, 1, 0)
+bankGui.AlwaysOnTop = true
+bankGui.Adornee = bankSignPart
+bankGui.Parent = bankSignPart
+
+local bankLbl = Instance.new("TextLabel")
+bankLbl.Size = UDim2.new(1, 0, 0.65, 0)
+bankLbl.BackgroundTransparency = 1
+bankLbl.TextColor3 = Color3.fromRGB(255, 215, 0)
+bankLbl.Font = Enum.Font.GothamBlack
+bankLbl.TextScaled = true
+bankLbl.Text = "🏦 VAULT DEPOSIT BANK"
+bankLbl.Parent = bankGui
+
+local bankSubLbl = Instance.new("TextLabel")
+bankSubLbl.Size = UDim2.new(1, 0, 0.35, 0)
+bankSubLbl.Position = UDim2.new(0, 0, 0.65, 0)
+bankSubLbl.BackgroundTransparency = 1
+bankSubLbl.TextColor3 = Color3.fromRGB(200, 240, 255)
+bankSubLbl.Font = Enum.Font.GothamBold
+bankSubLbl.TextScaled = true
+bankSubLbl.Text = "STEP HERE TO BANK STOLEN EGGS!"
+bankSubLbl.Parent = bankGui
 
 ------------------------------------------------------------
--- 2. PHYSICAL SHOPS IN LOBBY
+-- 2. STYLIZED CYBER KIOSKS (Speed Lab & Vault Perks)
 ------------------------------------------------------------
-local function buildShopBooth(shopType, shopName, shopColor, iconText, position)
-	local boothModel = Instance.new("Model")
-	boothModel.Name = shopType .. "Shop"
-	boothModel.Parent = shopsFolder
+local function createStylizedKiosk(shopType, titleText, iconText, themeColor, pos)
+	local m = Instance.new("Model")
+	m.Name = shopType .. "Shop"
+	m.Parent = lobbyFolder
 
-	-- Base / counter
-	local counter = createPart("Counter", Vector3.new(16, 4, 8), CFrame.new(position + Vector3.new(0, 2, 0)), Color3.fromRGB(30, 35, 50), Enum.Material.Metal, boothModel)
-	createPart("CounterTop", Vector3.new(17, 0.6, 8.5), CFrame.new(position + Vector3.new(0, 4.3, 0)), shopColor, Enum.Material.Neon, boothModel)
+	-- Counter
+	local counter = makePart({
+		Name = "Counter",
+		Size = Vector3.new(18, 4.5, 8),
+		CFrame = CFrame.new(pos + Vector3.new(0, 2.25, 0)),
+		Color = Color3.fromRGB(28, 32, 48),
+		Material = Enum.Material.Metal,
+		Parent = m,
+	})
+	makePart({
+		Name = "CounterTrim",
+		Size = Vector3.new(18.4, 0.6, 8.4),
+		CFrame = CFrame.new(pos + Vector3.new(0, 4.6, 0)),
+		Color = themeColor,
+		Material = Enum.Material.Neon,
+		Parent = m,
+	})
 
-	-- Back wall & Roof
-	createPart("BackWall", Vector3.new(16, 12, 1.5), CFrame.new(position + Vector3.new(0, 8, -4)), Color3.fromRGB(20, 22, 35), Enum.Material.Slate, boothModel)
-	createPart("Roof", Vector3.new(18, 1.5, 10), CFrame.new(position + Vector3.new(0, 14.5, 0)), Color3.fromRGB(30, 35, 55), Enum.Material.Metal, boothModel)
-	createPart("RoofTrim", Vector3.new(18.5, 0.8, 10.5), CFrame.new(position + Vector3.new(0, 15, 0)), shopColor, Enum.Material.Neon, boothModel)
+	-- Backwall & Canopy
+	makePart({
+		Name = "BackWall",
+		Size = Vector3.new(18, 14, 1.5),
+		CFrame = CFrame.new(pos + Vector3.new(0, 9, -4)),
+		Color = Color3.fromRGB(18, 20, 32),
+		Material = Enum.Material.Slate,
+		Parent = m,
+	})
+	makePart({
+		Name = "Roof",
+		Size = Vector3.new(20, 1.8, 11),
+		CFrame = CFrame.new(pos + Vector3.new(0, 16, 0)),
+		Color = Color3.fromRGB(25, 28, 44),
+		Material = Enum.Material.Metal,
+		Parent = m,
+	})
+	makePart({
+		Name = "RoofNeon",
+		Size = Vector3.new(20.5, 0.8, 11.5),
+		CFrame = CFrame.new(pos + Vector3.new(0, 16.5, 0)),
+		Color = themeColor,
+		Material = Enum.Material.Neon,
+		Parent = m,
+	})
 
-	-- Floating 3D Title Sign
-	local signPart = createPart("SignPart", Vector3.new(14, 3, 1), CFrame.new(position + Vector3.new(0, 17, 0)), shopColor, Enum.Material.Neon, boothModel)
-	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.new(0, 280, 0, 70)
-	bb.StudsOffset = Vector3.new(0, 1.5, 0)
-	bb.AlwaysOnTop = true
-	bb.Adornee = signPart
-	bb.Parent = signPart
+	-- 3D Spinning Hologram above roof
+	local holoPart = makePart({
+		Name = "HoloPart",
+		Size = Vector3.new(3, 3, 3),
+		CFrame = CFrame.new(pos + Vector3.new(0, 19.5, 0)),
+		Color = themeColor,
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		Parent = m,
+	})
+	task.spawn(function()
+		while holoPart and holoPart.Parent do
+			holoPart.CFrame = holoPart.CFrame * CFrame.Angles(0, math.rad(2), 0)
+			task.wait(0.03)
+		end
+	end)
 
-	local signLbl = Instance.new("TextLabel")
-	signLbl.Size = UDim2.new(1, 0, 1, 0)
-	signLbl.BackgroundTransparency = 1
-	signLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
-	signLbl.TextStrokeTransparency = 0.2
-	signLbl.Font = Enum.Font.GothamBold
-	signLbl.TextScaled = true
-	signLbl.Text = iconText .. " " .. shopName
-	signLbl.Parent = bb
+	local holoGui = Instance.new("BillboardGui")
+	holoGui.Size = UDim2.new(0, 260, 0, 70)
+	holoGui.StudsOffset = Vector3.new(0, 2.5, 0)
+	holoGui.AlwaysOnTop = true
+	holoGui.Adornee = holoPart
+	holoGui.Parent = holoPart
 
-	-- Proximity Prompt on Counter
+	local hText = Instance.new("TextLabel")
+	hText.Size = UDim2.new(1, 0, 1, 0)
+	hText.BackgroundTransparency = 1
+	hText.TextColor3 = Color3.fromRGB(255, 255, 255)
+	hText.Font = Enum.Font.GothamBlack
+	hText.TextScaled = true
+	hText.Text = iconText .. " " .. titleText
+	hText.Parent = holoGui
+
+	-- Proximity Prompt
 	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "ShopPrompt"
-	prompt.ObjectText = shopName
+	prompt.ObjectText = titleText
 	prompt.ActionText = "Open Shop"
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 14
+	prompt.MaxActivationDistance = 16
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = counter
 
@@ -182,13 +292,19 @@ local function buildShopBooth(shopType, shopName, shopColor, iconText, position)
 	end)
 
 	-- Step-on glowing shop pad
-	local pad = createPart("ShopPad", Vector3.new(10, 0.4, 6), CFrame.new(position + Vector3.new(0, 0.3, 7)), shopColor, Enum.Material.Neon, boothModel, true, 0.3)
-	
-	-- Pad touch opens shop too (for mobile / fast-run)
+	local pad = makePart({
+		Name = "ShopPad",
+		Size = Vector3.new(12, 0.4, 7),
+		CFrame = CFrame.new(pos + Vector3.new(0, 0.4, 7.5)),
+		Color = themeColor,
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		Parent = m,
+	})
+
 	local padDebounce = {}
 	pad.Touched:Connect(function(hit)
-		local char = hit.Parent
-		local player = Players:GetPlayerFromCharacter(char)
+		local player = Players:GetPlayerFromCharacter(hit.Parent)
 		if player and not padDebounce[player] then
 			padDebounce[player] = true
 			OpenShopEvent:FireClient(player, shopType)
@@ -198,171 +314,195 @@ local function buildShopBooth(shopType, shopName, shopColor, iconText, position)
 	end)
 end
 
--- Build Speed Lab (Left side)
-buildShopBooth(
-	"Speed",
-	"SPEED LAB",
-	Color3.fromRGB(0, 190, 255),
-	"⚡",
-	lobbyPos + Vector3.new(-26, 0, -10)
-)
+-- Speed Lab (Left)
+createStylizedKiosk("Speed", "SPEED LAB", "⚡", Color3.fromRGB(0, 210, 255), lobbyPos + Vector3.new(-32, 0, 5))
 
--- Build Vault Perks (Right side)
-buildShopBooth(
-	"Perks",
-	"VAULT PERKS",
-	Color3.fromRGB(255, 190, 0),
-	"💎",
-	lobbyPos + Vector3.new(26, 0, -10)
-)
+-- Vault Perks & Backpack (Right)
+createStylizedKiosk("Perks", "VAULT PERKS", "💎", Color3.fromRGB(255, 180, 0), lobbyPos + Vector3.new(32, 0, 5))
 
 ------------------------------------------------------------
--- 3. BRIDGE TO ARENA
+-- 3. TRANSIT BRIDGE & ENTRANCE GATE
 ------------------------------------------------------------
-local bridgeLength = 32
-local bridgeWidth = 14
-local bridgeStart = lobbyPos.Z + (lobbySize.Z / 2) -- e.g. -120 + 30 = -90
-local bridgeZ = -75
-local bridgeFloor = createPart(
-	"BridgeFloor",
-	Vector3.new(bridgeWidth, 2, bridgeLength),
-	CFrame.new(0, 6, bridgeZ),
-	Color3.fromRGB(35, 40, 55),
-	Enum.Material.Metal,
-	mapFolder
-)
--- Bridge rails
-createPart("BridgeRailL", Vector3.new(1, 3, bridgeLength), CFrame.new(-bridgeWidth/2, 8, bridgeZ), Color3.fromRGB(0, 220, 255), Enum.Material.Neon, mapFolder)
-createPart("BridgeRailR", Vector3.new(1, 3, bridgeLength), CFrame.new(bridgeWidth/2, 8, bridgeZ), Color3.fromRGB(0, 220, 255), Enum.Material.Neon, mapFolder)
+local bridgeLength = 36
+local bridgeWidth = 16
+local bridgeZ = -78
+
+local bridge = makePart({
+	Name = "CyberBridge",
+	Size = Vector3.new(bridgeWidth, 2, bridgeLength),
+	CFrame = CFrame.new(0, 8, bridgeZ),
+	Color = Color3.fromRGB(30, 34, 48),
+	Material = Enum.Material.Metal,
+	Parent = lobbyFolder,
+})
+
+makePart({ Name = "BridgeRailL", Size = Vector3.new(1, 3.5, bridgeLength), CFrame = CFrame.new(-bridgeWidth/2, 10.5, bridgeZ), Color = Color3.fromRGB(0, 240, 255), Material = Enum.Material.Neon, Parent = lobbyFolder })
+makePart({ Name = "BridgeRailR", Size = Vector3.new(1, 3.5, bridgeLength), CFrame = CFrame.new(bridgeWidth/2, 10.5, bridgeZ),  Color = Color3.fromRGB(0, 240, 255), Material = Enum.Material.Neon, Parent = lobbyFolder })
 
 ------------------------------------------------------------
--- 4. CHRONOS VAULT ARENA
+-- 4. CHRONOS ARENA WITH TIERED PLATFORMS
 ------------------------------------------------------------
-local arenaSize = Config.ARENA_SIZE
-local arenaFloor = createPart(
-	"ArenaFloor",
-	arenaSize,
-	CFrame.new(Config.ARENA_CENTER),
-	Color3.fromRGB(20, 22, 32),
-	Enum.Material.Slate,
-	mapFolder
-)
+local arenaSize = Vector3.new(190, 4, 190)
 
--- Arena perimeter neon barrier walls
-local wallHeight = 28
-local wallThick = 2
+-- Main Arena Ground
+makePart({
+	Name = "ArenaGround",
+	Size = arenaSize,
+	CFrame = CFrame.new(0, 0, 0),
+	Color = Color3.fromRGB(16, 18, 26),
+	Material = Enum.Material.Slate,
+	Parent = arenaFolder,
+})
+
+-- Perimeter High-Tech Barrier
+local pWallHeight = 32
+local pWallThick = 2
 local halfX = arenaSize.X / 2
 local halfZ = arenaSize.Z / 2
 
-createPart("WallNorth", Vector3.new(arenaSize.X, wallHeight, wallThick), CFrame.new(0, wallHeight/2, -halfZ), Color3.fromRGB(0, 180, 255), Enum.Material.ForceField, mapFolder, true, 0.6)
-createPart("WallSouth", Vector3.new(arenaSize.X, wallHeight, wallThick), CFrame.new(0, wallHeight/2, halfZ), Color3.fromRGB(0, 180, 255), Enum.Material.ForceField, mapFolder, true, 0.6)
-createPart("WallEast",  Vector3.new(wallThick, wallHeight, arenaSize.Z), CFrame.new(halfX, wallHeight/2, 0), Color3.fromRGB(0, 180, 255), Enum.Material.ForceField, mapFolder, true, 0.6)
-createPart("WallWest",  Vector3.new(wallThick, wallHeight, arenaSize.Z), CFrame.new(-halfX, wallHeight/2, 0), Color3.fromRGB(0, 180, 255), Enum.Material.ForceField, mapFolder, true, 0.6)
+makePart({ Name = "PW_North", Size = Vector3.new(arenaSize.X, pWallHeight, pWallThick), CFrame = CFrame.new(0, pWallHeight/2, -halfZ), Color = Color3.fromRGB(0, 200, 255), Material = Enum.Material.ForceField, Transparency = 0.65, Parent = arenaFolder })
+makePart({ Name = "PW_South", Size = Vector3.new(arenaSize.X, pWallHeight, pWallThick), CFrame = CFrame.new(0, pWallHeight/2, halfZ),  Color = Color3.fromRGB(0, 200, 255), Material = Enum.Material.ForceField, Transparency = 0.65, Parent = arenaFolder })
+makePart({ Name = "PW_East",  Size = Vector3.new(pWallThick, pWallHeight, arenaSize.Z), CFrame = CFrame.new(halfX, pWallHeight/2, 0),  Color = Color3.fromRGB(0, 200, 255), Material = Enum.Material.ForceField, Transparency = 0.65, Parent = arenaFolder })
+makePart({ Name = "PW_West",  Size = Vector3.new(pWallThick, pWallHeight, arenaSize.Z), CFrame = CFrame.new(-halfX, pWallHeight/2, 0), Color = Color3.fromRGB(0, 200, 255), Material = Enum.Material.ForceField, Transparency = 0.65, Parent = arenaFolder })
 
 ------------------------------------------------------------
--- 5. CENTRAL VAULT DAIS & PILLARS
+-- 5. CENTRAL VAULT DAIS & ENERGY CONDUITS
 ------------------------------------------------------------
-local vaultCenter = Config.VAULT_CORE_POS
+local corePos = Config.VAULT_CORE_POS
 
--- Main raised circular platform
-local vaultDais = createPart(
-	"VaultCoreDais",
-	Vector3.new(38, 6, 38),
-	CFrame.new(vaultCenter + Vector3.new(0, -3, 0)),
-	Color3.fromRGB(30, 32, 45),
-	Enum.Material.Metal,
-	mapFolder
-)
-createPart("VaultDaisTrim", Vector3.new(39, 1, 39), CFrame.new(vaultCenter + Vector3.new(0, 0.3, 0)), Color3.fromRGB(255, 60, 180), Enum.Material.Neon, mapFolder)
+-- Multi-tier raised dais
+makePart({ Name = "DaisBase", Size = Vector3.new(44, 4, 44), CFrame = CFrame.new(corePos + Vector3.new(0, -2, 0)), Color = Color3.fromRGB(24, 28, 42), Material = Enum.Material.Metal, Parent = arenaFolder })
+makePart({ Name = "DaisTop",  Size = Vector3.new(34, 4, 34), CFrame = CFrame.new(corePos + Vector3.new(0, 2, 0)),  Color = Color3.fromRGB(34, 38, 56), Material = Enum.Material.Metal, Parent = arenaFolder })
+makePart({ Name = "DaisTrim", Size = Vector3.new(35, 0.6, 35), CFrame = CFrame.new(corePos + Vector3.new(0, 4.3, 0)), Color = Color3.fromRGB(255, 60, 180), Material = Enum.Material.Neon, Parent = arenaFolder })
 
--- 4 Corner Energy Pillars
-local pillarOffsets = {
-	Vector3.new(16, 8, 16),
-	Vector3.new(-16, 8, 16),
-	Vector3.new(16, 8, -16),
-	Vector3.new(-16, 8, -16),
+-- 4 Corner Obsidian Energy Pillars
+local pillarLocs = {
+	Vector3.new(14, 10, 14),
+	Vector3.new(-14, 10, 14),
+	Vector3.new(14, 10, -14),
+	Vector3.new(-14, 10, -14),
 }
-for i, offset in ipairs(pillarOffsets) do
-	local pillar = createPart("EnergyPillar_" .. i, Vector3.new(3.5, 20, 3.5), CFrame.new(vaultCenter + offset), Color3.fromRGB(0, 240, 255), Enum.Material.Neon, mapFolder)
+for i, pOffset in ipairs(pillarLocs) do
+	makePart({
+		Name = "CorePillar_" .. i,
+		Size = Vector3.new(4, 24, 4),
+		CFrame = CFrame.new(corePos + pOffset),
+		Color = Color3.fromRGB(0, 230, 255),
+		Material = Enum.Material.Neon,
+		Parent = arenaFolder,
+	})
 end
 
--- Center Chronos Core (Pulsing Diamond)
-local corePart = createPart("ChronosCore", Vector3.new(6, 6, 6), CFrame.new(vaultCenter + Vector3.new(0, 7, 0)), Color3.fromRGB(255, 40, 150), Enum.Material.Neon, mapFolder, false)
-corePart.Shape = Enum.PartType.Ball
+-- Central Pedestal for Rare Chronos Core Egg
+local corePed = makePart({
+	Name = "ChronosEggPedestal",
+	Size = Vector3.new(8, 2, 8),
+	CFrame = CFrame.new(corePos + Vector3.new(0, 5, 0)),
+	Color = Color3.fromRGB(255, 215, 0),
+	Material = Enum.Material.Neon,
+	Parent = arenaFolder,
+})
 
--- Central Pedestal for Rare Core Egg
-local corePedestal = createPart("CorePedestal", Vector3.new(8, 2, 8), CFrame.new(vaultCenter + Vector3.new(0, 1, 0)), Color3.fromRGB(255, 215, 0), Enum.Material.Neon, mapFolder)
-
--- 4 Ramps leading up to vault center
-local rampLength = 20
-local rampHeight = 6
-local rampWidth = 10
-local function createRamp(name, cf)
-	local ramp = Instance.new("WedgePart")
-	ramp.Name = name
-	ramp.Size = Vector3.new(rampWidth, rampHeight, rampLength)
-	ramp.CFrame = cf
-	ramp.Color = Color3.fromRGB(40, 45, 65)
-	ramp.Material = Enum.Material.Metal
-	ramp.Anchored = true
-	ramp.Parent = mapFolder
-	return ramp
+-- 4 Access Ramps
+local function makeRamp(name, cf)
+	local r = Instance.new("WedgePart")
+	r.Name = name
+	r.Size = Vector3.new(12, 6, 22)
+	r.CFrame = cf
+	r.Color = Color3.fromRGB(38, 42, 62)
+	r.Material = Enum.Material.Metal
+	r.Anchored = true
+	r.Parent = arenaFolder
+	return r
 end
 
-createRamp("VaultRampN", CFrame.new(0, 0, -29) * CFrame.Angles(0, math.rad(180), 0))
-createRamp("VaultRampS", CFrame.new(0, 0, 29) * CFrame.Angles(0, 0, 0))
-createRamp("VaultRampE", CFrame.new(29, 0, 0) * CFrame.Angles(0, math.rad(90), 0))
-createRamp("VaultRampW", CFrame.new(-29, 0, 0) * CFrame.Angles(0, math.rad(-90), 0))
+makeRamp("RampNorth", CFrame.new(0, 1, -28) * CFrame.Angles(0, math.rad(180), 0))
+makeRamp("RampSouth", CFrame.new(0, 1, 28) * CFrame.Angles(0, 0, 0))
+makeRamp("RampEast",  CFrame.new(28, 1, 0) * CFrame.Angles(0, math.rad(90), 0))
+makeRamp("RampWest",  CFrame.new(-28, 1, 0) * CFrame.Angles(0, math.rad(-90), 0))
 
 ------------------------------------------------------------
--- 6. FOUR CORNER HAZARD TOWERS
+-- 6. FOUR CORNER HAZARD TOWERS & BRIDGES
 ------------------------------------------------------------
 local towerCoords = {
-	Vector3.new(60, 0, 60),
-	Vector3.new(-60, 0, 60),
-	Vector3.new(60, 0, -60),
-	Vector3.new(-60, 0, -60),
+	Vector3.new(62, 0, 62),
+	Vector3.new(-62, 0, 62),
+	Vector3.new(62, 0, -62),
+	Vector3.new(-62, 0, -62),
 }
 
-for i, pos in ipairs(towerCoords) do
-	local towerPlatform = createPart("Tower_" .. i, Vector3.new(22, 10, 22), CFrame.new(pos + Vector3.new(0, 5, 0)), Color3.fromRGB(28, 30, 42), Enum.Material.Slate, mapFolder)
-	createPart("TowerTrim_" .. i, Vector3.new(23, 1, 23), CFrame.new(pos + Vector3.new(0, 10.3, 0)), Color3.fromRGB(255, 200, 0), Enum.Material.Neon, mapFolder)
-
-	-- Egg spawn pedestal on top of tower
-	createPart("TowerPedestal_" .. i, Vector3.new(5, 1, 5), CFrame.new(pos + Vector3.new(0, 11, 0)), Color3.fromRGB(0, 220, 255), Enum.Material.Neon, mapFolder)
+for i, tPos in ipairs(towerCoords) do
+	makePart({ Name = "TowerPlatform_" .. i, Size = Vector3.new(24, 12, 24), CFrame = CFrame.new(tPos + Vector3.new(0, 6, 0)), Color = Color3.fromRGB(24, 28, 40), Material = Enum.Material.Slate, Parent = arenaFolder })
+	makePart({ Name = "TowerTrim_" .. i, Size = Vector3.new(25, 0.8, 25), CFrame = CFrame.new(tPos + Vector3.new(0, 12.4, 0)), Color = Color3.fromRGB(255, 200, 0), Material = Enum.Material.Neon, Parent = arenaFolder })
+	makePart({ Name = "TowerPedestal_" .. i, Size = Vector3.new(6, 1.2, 6), CFrame = CFrame.new(tPos + Vector3.new(0, 13.2, 0)), Color = Color3.fromRGB(0, 220, 255), Material = Enum.Material.Neon, Parent = arenaFolder })
 end
 
 ------------------------------------------------------------
--- 7. KINETIC BOUNCE / JUMP PADS
+-- 7. KINETIC BOUNCE PADS (High-Speed Super Fling)
 ------------------------------------------------------------
-local padLocations = {
-	{ Pos = Vector3.new(35, 1.2, 35),   Dir = Vector3.new(-40, 75, -40) },
-	{ Pos = Vector3.new(-35, 1.2, 35),  Dir = Vector3.new(40, 75, -40) },
-	{ Pos = Vector3.new(35, 1.2, -35),  Dir = Vector3.new(-40, 75, 40) },
-	{ Pos = Vector3.new(-35, 1.2, -35), Dir = Vector3.new(40, 75, 40) },
+local bounceLocations = {
+	{ Pos = Vector3.new(38, 0.6, 38),   Dir = Vector3.new(-45, 80, -45) },
+	{ Pos = Vector3.new(-38, 0.6, 38),  Dir = Vector3.new(45, 80, -45) },
+	{ Pos = Vector3.new(38, 0.6, -38),  Dir = Vector3.new(-45, 80, 45) },
+	{ Pos = Vector3.new(-38, 0.6, -38), Dir = Vector3.new(45, 80, 45) },
 }
 
-for i, padData in ipairs(padLocations) do
-	local bPad = createPart("BouncePad_" .. i, Vector3.new(7, 0.8, 7), CFrame.new(padData.Pos), Color3.fromRGB(50, 255, 100), Enum.Material.Neon, padsFolder)
+for i, bData in ipairs(bounceLocations) do
+	local bPad = makePart({
+		Name = "KineticPad_" .. i,
+		Size = Vector3.new(8, 0.8, 8),
+		CFrame = CFrame.new(bData.Pos),
+		Color = Color3.fromRGB(40, 255, 120),
+		Material = Enum.Material.Neon,
+		Parent = arenaFolder,
+	})
 
-	local bDebounce = {}
+	local padDebounce = {}
 	bPad.Touched:Connect(function(hit)
 		local char = hit.Parent
 		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		local hum = char and char:FindFirstChild("Humanoid")
-		if hrp and hum and not bDebounce[char] then
-			bDebounce[char] = true
-			-- Kinetic fling upward & toward center
-			hrp.AssemblyLinearVelocity = padData.Dir
+		if hrp and not padDebounce[char] then
+			padDebounce[char] = true
+
+			-- Play Kinetic Whoosh Sound
+			local snd = Instance.new("Sound")
+			snd.SoundId = Config.SOUNDS.JumpPad
+			snd.Volume = 1.0
+			snd.PlayOnRemove = true
+			snd.Parent = bPad
+			snd:Destroy()
+
+			-- Boost physics
+			hrp.AssemblyLinearVelocity = bData.Dir
 
 			-- Visual flash
 			bPad.Color = Color3.fromRGB(255, 255, 255)
-			task.wait(0.3)
-			bPad.Color = Color3.fromRGB(50, 255, 100)
+			task.wait(0.2)
+			bPad.Color = Color3.fromRGB(40, 255, 120)
 			task.wait(0.5)
-			bDebounce[char] = nil
+			padDebounce[char] = nil
 		end
 	end)
 end
 
-print("[ChronosVault] Map & Shops built successfully ✓")
+------------------------------------------------------------
+-- 8. DECORATIVE CYBER CRYSTALS
+------------------------------------------------------------
+local crystalOffsets = {
+	Vector3.new(30, 2, 0), Vector3.new(-30, 2, 0),
+	Vector3.new(0, 2, 30), Vector3.new(0, 2, -30),
+	Vector3.new(50, 2, 20), Vector3.new(-50, 2, -20),
+}
+
+for i, cPos in ipairs(crystalOffsets) do
+	local crystal = makePart({
+		Name = "CyberCrystal_" .. i,
+		Size = Vector3.new(2.5, 6, 2.5),
+		CFrame = CFrame.new(cPos) * CFrame.Angles(math.rad(math.random(-15, 15)), math.rad(math.random(0, 180)), math.rad(math.random(-15, 15))),
+		Color = (i % 2 == 0) and Color3.fromRGB(0, 240, 255) or Color3.fromRGB(255, 50, 180),
+		Material = Enum.Material.Neon,
+		Parent = propsFolder,
+	})
+end
+
+print("[ChronosVault] High-Tier Cyber Map & Deposit Bank Built ✓")

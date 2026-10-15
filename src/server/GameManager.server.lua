@@ -1,15 +1,17 @@
 --[[
     GameManager.server.lua (ServerScriptService)
-    Core server loop:
-    - Player stat management (WalkSpeed, JumpPower, Multipliers)
-    - Full upgrade shop transactions (Speed, Multiplier, Jump, Magnet)
-    - Round lifecycle with Arena Egg Spawning (Normal + Core Eggs)
-    - Safe-zone leaderstats & data sync
+    Chronos Vault: Core Game Loop & Steal-the-Egg Mechanics
+    - Backpack carrying system with visual eggs stacked on player's back
+    - Multi-tier egg spawning with smooth floating/bobbing rotation & sparkle auras
+    - The Great Deposit Vault (bank eggs for currency with multipliers)
+    - Full RemoteEvent synchronization (HUD, sounds, floating reward numbers)
+    - Background music player
 ]]
 
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService      = game:GetService("TweenService")
+local RunService        = game:GetService("RunService")
 
 local Config     = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local DataModule = require(script.Parent:WaitForChild("DataStoreModule"))
@@ -17,43 +19,102 @@ local DataModule = require(script.Parent:WaitForChild("DataStoreModule"))
 ------------------------------------------------------------
 -- REMOTE EVENTS
 ------------------------------------------------------------
-local function getOrCreate(name, className)
-	local obj = ReplicatedStorage:FindFirstChild(name)
-	if not obj then
-		obj = Instance.new(className)
-		obj.Name = name
-		obj.Parent = ReplicatedStorage
+local function getOrCreateRemote(name)
+	local r = ReplicatedStorage:FindFirstChild(name)
+	if not r then
+		r = Instance.new("RemoteEvent")
+		r.Name = name
+		r.Parent = ReplicatedStorage
 	end
-	return obj
+	return r
 end
 
-local BuyUpgradeEvent = getOrCreate("BuyUpgrade", "RemoteEvent")
-local SyncDataEvent   = getOrCreate("SyncData", "RemoteEvent")
-local StatusEvent     = getOrCreate("RoundStatus", "RemoteEvent")
-local EggCountEvent   = getOrCreate("EggCount", "RemoteEvent")
-local SpeedLevelEvent = getOrCreate("SpeedLevel", "RemoteEvent")
+local BuyUpgradeEvent = getOrCreateRemote("BuyUpgrade")
+local SyncDataEvent   = getOrCreateRemote("SyncData")
+local StatusEvent     = getOrCreateRemote("RoundStatus")
+local EggEffectEvent  = getOrCreateRemote("EggEffect")  -- Floating 3D text / sound
 
 ------------------------------------------------------------
--- EGG CONTAINER
+-- FOLDERS & AUDIO
 ------------------------------------------------------------
 local eggFolder = workspace:FindFirstChild("EggSpawns") or Instance.new("Folder")
 eggFolder.Name = "EggSpawns"
 eggFolder.Parent = workspace
 
+-- Background Music Loop
+local bgMusic = workspace:FindFirstChild("ChronosBGM") or Instance.new("Sound")
+bgMusic.Name = "ChronosBGM"
+bgMusic.SoundId = Config.SOUNDS.MusicLoop
+bgMusic.Volume = 0.35
+bgMusic.Looped = true
+bgMusic.Parent = workspace
+if not bgMusic.IsPlaying then
+	bgMusic:Play()
+end
+
 ------------------------------------------------------------
--- CHARACTER STAT APPLICATION
+-- PLAYER BACKPACK STATE (In-Memory)
 ------------------------------------------------------------
-local function applyCharacterStats(player: Player, char: Model)
+-- [userId] = { Count = 0, Value = 0, Visuals = {} }
+local playerBackpacks = {}
+
+local function getCapacity(player: Player)
+	local data = DataModule.Get(player)
+	local bpLvl = data.BackpackLevel or 0
+	return Config.BASE_CAPACITY + (bpLvl * Config.CAPACITY_INCREMENT)
+end
+
+local function updateBackpackVisuals(player: Player)
+	local bp = playerBackpacks[player.UserId]
+	if not bp then return end
+
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	-- Clear old attached egg parts
+	for _, part in ipairs(bp.Visuals or {}) do
+		if part and part.Parent then
+			part:Destroy()
+		end
+	end
+	bp.Visuals = {}
+
+	-- Stack carried eggs vertically on player's back
+	for i = 1, bp.Count do
+		local visualEgg = Instance.new("Part")
+		visualEgg.Name = "CarriedEgg_" .. i
+		visualEgg.Shape = Enum.PartType.Ball
+		visualEgg.Size = Vector3.new(1.1, 1.4, 1.1)
+		visualEgg.Color = Color3.fromRGB(255, 215, 0)
+		visualEgg.Material = Enum.Material.Neon
+		visualEgg.CanCollide = false
+		visualEgg.Massless = true
+		visualEgg.Parent = char
+
+		local weld = Instance.new("WeldConstraint")
+		visualEgg.CFrame = hrp.CFrame * CFrame.new(0, -0.4 + (i * 1.3), 1.1)
+		weld.Part0 = hrp
+		weld.Part1 = visualEgg
+		weld.Parent = visualEgg
+
+		table.insert(bp.Visuals, visualEgg)
+	end
+end
+
+------------------------------------------------------------
+-- STAT APPLICATION
+------------------------------------------------------------
+local function applyStats(player: Player, char: Model)
 	local hum = char:WaitForChild("Humanoid", 5)
 	if not hum then return end
 
 	local data = DataModule.Get(player)
-	local speedCfg = Config.UPGRADES.Speed
-	local jumpCfg  = Config.UPGRADES.Jump
-
-	hum.WalkSpeed = speedCfg.BaseValue + (data.SpeedLevel * speedCfg.Increment)
+	hum.WalkSpeed = Config.UPGRADES.Speed.BaseValue + (data.SpeedLevel * Config.UPGRADES.Speed.Increment)
 	hum.UseJumpPower = true
-	hum.JumpPower = jumpCfg.BaseValue + (data.JumpLevel * jumpCfg.Increment)
+	hum.JumpPower = Config.UPGRADES.Jump.BaseValue + (data.JumpLevel * Config.UPGRADES.Jump.Increment)
+
+	updateBackpackVisuals(player)
 end
 
 ------------------------------------------------------------
@@ -62,7 +123,13 @@ end
 local function setupPlayer(player: Player)
 	local data = DataModule.Load(player)
 
-	-- Leaderstats (Visible in Roblox Tab list)
+	playerBackpacks[player.UserId] = {
+		Count = 0,
+		Value = 0,
+		Visuals = {},
+	}
+
+	-- Leaderstats (Visible in player list)
 	local ls = player:FindFirstChild("leaderstats") or Instance.new("Folder")
 	ls.Name = "leaderstats"
 	ls.Parent = player
@@ -77,24 +144,33 @@ local function setupPlayer(player: Player)
 	totalVal.Value = data.TotalEggs
 	totalVal.Parent = ls
 
-	-- Hook character spawning
 	player.CharacterAdded:Connect(function(char)
-		applyCharacterStats(player, char)
+		applyStats(player, char)
 	end)
 
 	if player.Character then
-		applyCharacterStats(player, player.Character)
+		applyStats(player, player.Character)
 	end
 
-	-- Initial sync
-	SyncDataEvent:FireClient(player, data)
-	EggCountEvent:FireClient(player, data.Eggs)
-	SpeedLevelEvent:FireClient(player, data.SpeedLevel)
+	-- Sync state to client
+	local payload = {
+		Eggs            = data.Eggs,
+		TotalEggs       = data.TotalEggs,
+		SpeedLevel      = data.SpeedLevel,
+		BackpackLevel   = data.BackpackLevel,
+		MultiplierLevel = data.MultiplierLevel,
+		JumpLevel       = data.JumpLevel,
+		CarriedCount    = 0,
+		CarriedValue    = 0,
+		Capacity        = getCapacity(player),
+	}
+	SyncDataEvent:FireClient(player, payload)
 end
 
 local function teardownPlayer(player: Player)
 	DataModule.Save(player)
 	DataModule.RemoveCache(player)
+	playerBackpacks[player.UserId] = nil
 end
 
 Players.PlayerAdded:Connect(setupPlayer)
@@ -105,66 +181,194 @@ for _, p in ipairs(Players:GetPlayers()) do
 end
 
 ------------------------------------------------------------
--- SHOP TRANSACTIONS (BuyUpgrade)
+-- SHOP TRANSACTIONS
 ------------------------------------------------------------
-BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upgradeType: string)
-	local upDef = Config.UPGRADES[upgradeType]
+BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upKey: string)
+	local upDef = Config.UPGRADES[upKey]
 	if not upDef then return end
 
 	local data = DataModule.Get(player)
-	local levelKey = upgradeType .. "Level"
-	local currentLvl = data[levelKey] or 0
+	local lvlKey = upKey .. "Level"
+	local curLvl = data[lvlKey] or 0
+	if curLvl >= upDef.MaxLevel then return end
 
-	if currentLvl >= upDef.MaxLevel then return end
-
-	local cost = Config.GetCost(upgradeType, currentLvl)
-
+	local cost = Config.GetCost(upKey, curLvl)
 	if DataModule.SpendEggs(player, cost) then
 		data = DataModule.Get(player)
-		data[levelKey] = currentLvl + 1
+		data[lvlKey] = curLvl + 1
 		DataModule.Set(player, data)
 
-		-- Apply immediate in-game stat changes
 		if player.Character then
-			applyCharacterStats(player, player.Character)
+			applyStats(player, player.Character)
 		end
 
-		-- Update leaderstats
 		local ls = player:FindFirstChild("leaderstats")
 		if ls and ls:FindFirstChild("Eggs") then
 			ls.Eggs.Value = data.Eggs
 		end
 
-		-- Full sync back to client
-		SyncDataEvent:FireClient(player, data)
-		EggCountEvent:FireClient(player, data.Eggs)
-		SpeedLevelEvent:FireClient(player, data.SpeedLevel)
+		local bp = playerBackpacks[player.UserId] or { Count = 0, Value = 0 }
+		local payload = {
+			Eggs            = data.Eggs,
+			TotalEggs       = data.TotalEggs,
+			SpeedLevel      = data.SpeedLevel,
+			BackpackLevel   = data.BackpackLevel,
+			MultiplierLevel = data.MultiplierLevel,
+			JumpLevel       = data.JumpLevel,
+			CarriedCount    = bp.Count,
+			CarriedValue    = bp.Value,
+			Capacity        = getCapacity(player),
+		}
+		SyncDataEvent:FireClient(player, payload)
+
+		-- Play upgrade chime
+		EggEffectEvent:FireClient(player, "PlaySound", Config.SOUNDS.UpgradeBuy, 1.0)
 	end
 end)
 
 ------------------------------------------------------------
--- EGG SPAWN LOGIC
+-- THE DEPOSIT VAULT HOOK
 ------------------------------------------------------------
-local function spawnEggInstance(pos: Vector3, isCoreEgg: boolean)
+task.spawn(function()
+	local pad = workspace:WaitForChild("ChronosMap", 15)
+	if pad then pad = pad:WaitForChild("Lobby", 15) end
+	if pad then pad = pad:WaitForChild("DepositPad", 15) end
+	if not pad then return end
+
+	local depositDebounce = {}
+	pad.Touched:Connect(function(hit)
+		local char = hit.Parent
+		local player = Players:GetPlayerFromCharacter(char)
+		if not player or depositDebounce[player] then return end
+
+		local bp = playerBackpacks[player.UserId]
+		if bp and bp.Count > 0 then
+			depositDebounce[player] = true
+
+			local data = DataModule.Get(player)
+			local mult = 1 + ((data.MultiplierLevel or 0) * Config.UPGRADES.Multiplier.Increment)
+			local bankedTotal = bp.Value * mult
+
+			-- Credit player
+			DataModule.AddEggs(player, bankedTotal)
+			data = DataModule.Get(player)
+
+			local depositedCount = bp.Count
+			bp.Count = 0
+			bp.Value = 0
+			updateBackpackVisuals(player)
+
+			-- Update leaderstats
+			local ls = player:FindFirstChild("leaderstats")
+			if ls then
+				if ls:FindFirstChild("Eggs") then ls.Eggs.Value = data.Eggs end
+				if ls:FindFirstChild("Total") then ls.Total.Value = data.TotalEggs end
+			end
+
+			-- Fire client sound & visual burst
+			EggEffectEvent:FireClient(player, "DepositSuccess", bankedTotal, depositedCount)
+
+			-- Full sync
+			local payload = {
+				Eggs            = data.Eggs,
+				TotalEggs       = data.TotalEggs,
+				SpeedLevel      = data.SpeedLevel,
+				BackpackLevel   = data.BackpackLevel,
+				MultiplierLevel = data.MultiplierLevel,
+				JumpLevel       = data.JumpLevel,
+				CarriedCount    = 0,
+				CarriedValue    = 0,
+				Capacity        = getCapacity(player),
+			}
+			SyncDataEvent:FireClient(player, payload)
+
+			task.wait(1.5)
+			depositDebounce[player] = nil
+		end
+	end)
+end)
+
+------------------------------------------------------------
+-- JUICY EGG SPAWN & ANIMATION ENGINE
+------------------------------------------------------------
+local function pickRandomTier()
+	local roll = math.random(1, 100)
+	if roll <= 60 then
+		return "Common"
+	elseif roll <= 85 then
+		return "Silver"
+	elseif roll <= 97 then
+		return "Gold"
+	else
+		return "Chronos"
+	end
+end
+
+local function spawnEgg(pos: Vector3, forcedTier: string?)
+	local tierKey = forcedTier or pickRandomTier()
+	local tierDef = Config.EGG_TIERS[tierKey]
+
 	local egg = Instance.new("Part")
-	egg.Name = isCoreEgg and "CoreVaultEgg" or "VaultEgg"
+	egg.Name = "Egg_" .. tierKey
 	egg.Shape = Enum.PartType.Ball
-	egg.Size = isCoreEgg and (Config.EGG_SIZE * 1.4) or Config.EGG_SIZE
+	egg.Size = tierDef.Size
 	egg.Position = pos
 	egg.Anchored = true
 	egg.CanCollide = false
-	egg.Color = isCoreEgg and Config.CORE_EGG_COLOR or Config.EGG_COLOR
+	egg.Color = tierDef.Color
 	egg.Material = Enum.Material.Neon
 	egg.Parent = eggFolder
 
-	-- Light & Highlight
+	-- PointLight Aura
 	local light = Instance.new("PointLight")
-	light.Color = egg.Color
-	light.Range = isCoreEgg and 18 or 10
-	light.Brightness = 2
+	light.Color = tierDef.Color
+	light.Range = (tierKey == "Chronos") and 18 or 10
+	light.Brightness = 2.5
 	light.Parent = egg
 
-	-- Touch pickup
+	-- Sparkle Particles
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = tierDef.ParticleClr
+	pe.Size = NumberSequence.new(0.5, 0.1)
+	pe.Lifetime = NumberRange.new(0.8, 1.4)
+	pe.Rate = (tierKey == "Chronos") and 30 or 12
+	pe.Speed = NumberRange.new(2, 5)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Parent = egg
+
+	-- 3D Name Tag above Egg
+	local bg = Instance.new("BillboardGui")
+	bg.Size = UDim2.new(0, 150, 0, 40)
+	bg.StudsOffset = Vector3.new(0, tierDef.Size.Y + 0.8, 0)
+	bg.AlwaysOnTop = false
+	bg.Adornee = egg
+	bg.Parent = egg
+
+	local tl = Instance.new("TextLabel")
+	tl.Size = UDim2.new(1, 0, 1, 0)
+	tl.BackgroundTransparency = 1
+	tl.TextColor3 = tierDef.Color
+	tl.TextStrokeTransparency = 0.2
+	tl.Font = Enum.Font.GothamBlack
+	tl.TextScaled = true
+	tl.Text = tierDef.Name
+	tl.Parent = bg
+
+	-- Smooth Floating / Bobbing & Rotating animation
+	local basePosY = pos.Y
+	local startTime = tick() + math.random() * 5
+	local rotConnection
+	rotConnection = RunService.Heartbeat:Connect(function()
+		if not egg or not egg.Parent then
+			rotConnection:Disconnect()
+			return
+		end
+		local elapsed = tick() - startTime
+		local bobOffset = math.sin(elapsed * 3) * 0.7
+		egg.CFrame = CFrame.new(pos.X, basePosY + bobOffset, pos.Z) * CFrame.Angles(0, elapsed * 2.2, 0)
+	end)
+
+	-- Pickup Touch Listener
 	local collected = false
 	egg.Touched:Connect(function(hit)
 		if collected then return end
@@ -172,34 +376,49 @@ local function spawnEggInstance(pos: Vector3, isCoreEgg: boolean)
 		local player = Players:GetPlayerFromCharacter(char)
 		if not player then return end
 
-		collected = true
+		local bp = playerBackpacks[player.UserId]
+		local maxCap = getCapacity(player)
 
-		local data = DataModule.Get(player)
-		local multLvl = data.MultiplierLevel or 0
-		local mult = 1 + (multLvl * Config.UPGRADES.Multiplier.Increment)
-		local baseGained = isCoreEgg and Config.CORE_EGG_MULT or 1
-		local totalGained = baseGained * mult
-
-		DataModule.AddEggs(player, totalGained)
-		data = DataModule.Get(player)
-
-		-- Update leaderstats
-		local ls = player:FindFirstChild("leaderstats")
-		if ls then
-			if ls:FindFirstChild("Eggs") then ls.Eggs.Value = data.Eggs end
-			if ls:FindFirstChild("Total") then ls.Total.Value = data.TotalEggs end
+		if bp and bp.Count >= maxCap then
+			-- Alert Backpack Full!
+			EggEffectEvent:FireClient(player, "BackpackFull")
+			return
 		end
 
-		SyncDataEvent:FireClient(player, data)
-		EggCountEvent:FireClient(player, data.Eggs)
+		collected = true
+		rotConnection:Disconnect()
 
-		-- Pop animation
-		local tween = TweenService:Create(egg, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+		-- Add to carried backpack
+		bp.Count += 1
+		bp.Value += tierDef.Value
+		updateBackpackVisuals(player)
+
+		-- Fire juicy client effects
+		EggEffectEvent:FireClient(player, "EggCollected", tierDef.Name, tierDef.Value, tierDef.SoundPitch, egg.Position)
+
+		local data = DataModule.Get(player)
+		local payload = {
+			Eggs            = data.Eggs,
+			TotalEggs       = data.TotalEggs,
+			SpeedLevel      = data.SpeedLevel,
+			BackpackLevel   = data.BackpackLevel,
+			MultiplierLevel = data.MultiplierLevel,
+			JumpLevel       = data.JumpLevel,
+			CarriedCount    = bp.Count,
+			CarriedValue    = bp.Value,
+			Capacity        = maxCap,
+		}
+		SyncDataEvent:FireClient(player, payload)
+
+		-- Juicy Pop & Shrink Tween
+		pe:Emit(25)
+		light.Brightness = 6
+		local tw = TweenService:Create(egg, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
 			Size = Vector3.new(0.1, 0.1, 0.1),
 			Transparency = 1,
 		})
-		tween:Play()
-		tween.Completed:Connect(function()
+		tw:Play()
+		tw.Completed:Connect(function()
 			egg:Destroy()
 		end)
 	end)
@@ -207,72 +426,64 @@ local function spawnEggInstance(pos: Vector3, isCoreEgg: boolean)
 	return egg
 end
 
-local function spawnRoundEggs()
-	-- 1. Standard arena eggs
-	local min = Config.SPAWN_MIN
-	local max = Config.SPAWN_MAX
-	for _ = 1, Config.EGGS_PER_ROUND do
-		local pos = Vector3.new(
-			math.random(min.X, max.X),
-			min.Y,
-			math.random(min.Z, max.Z)
-		)
-		spawnEggInstance(pos, false)
-	end
-
-	-- 2. Tower eggs
-	local towerTops = {
-		Vector3.new(60, 12, 60),
-		Vector3.new(-60, 12, 60),
-		Vector3.new(60, 12, -60),
-		Vector3.new(-60, 12, -60),
-	}
-	for _, tPos in ipairs(towerTops) do
-		spawnEggInstance(tPos, false)
-	end
-
-	-- 3. Core Vault Rare Eggs in the center dais
-	local corePos = Config.VAULT_CORE_POS + Vector3.new(0, 3, 0)
-	spawnEggInstance(corePos, true)
-	spawnEggInstance(corePos + Vector3.new(5, 0, 5), true)
-	spawnEggInstance(corePos + Vector3.new(-5, 0, -5), true)
-end
-
-local function clearEggs()
+local function spawnArenaEggs()
 	for _, child in ipairs(eggFolder:GetChildren()) do
 		child:Destroy()
 	end
+
+	-- 1. Standard Arena Eggs
+	for _ = 1, Config.EGGS_PER_ROUND do
+		local pos = Vector3.new(
+			math.random(-75, 75),
+			3.5,
+			math.random(-75, 75)
+		)
+		spawnEgg(pos)
+	end
+
+	-- 2. Tower Tops (High value guaranteed)
+	local towerTops = {
+		Vector3.new(62, 14, 62),
+		Vector3.new(-62, 14, 62),
+		Vector3.new(62, 14, -62),
+		Vector3.new(-62, 14, -62),
+	}
+	for _, tPos in ipairs(towerTops) do
+		spawnEgg(tPos, "Gold")
+	end
+
+	-- 3. Central Core Pedestal (Legendary Chronos Egg)
+	local corePos = Config.VAULT_CORE_POS + Vector3.new(0, 7.5, 0)
+	spawnEgg(corePos, "Chronos")
 end
 
 ------------------------------------------------------------
--- ROUND LOOP
+-- ROUND CYCLE
 ------------------------------------------------------------
-local function broadcastStatus(msg: string)
+local function broadcast(msg)
 	StatusEvent:FireAllClients(msg)
 end
 
 task.spawn(function()
 	while true do
 		-- INTERMISSION
-		broadcastStatus("⏳ Intermission... Visit Shops in Lobby!")
-		clearEggs()
+		broadcast("⏳ Intermission... Upgrade & Deposit at Bank!")
 		task.wait(Config.INTERMISSION)
 
 		-- ROUND START
-		broadcastStatus("🚨 Vault Breach! Collect eggs & beware!")
-		spawnRoundEggs()
+		broadcast("🚨 VAULT BREACH! Steal eggs & escape to the Bank!")
+		spawnArenaEggs()
 
 		-- COUNTDOWN
 		for t = Config.ROUND_DURATION, 1, -1 do
-			broadcastStatus("⚡ Round Active: " .. t .. "s left")
+			broadcast("⚡ Time Left: " .. t .. "s | Return to Bank!")
 			task.wait(1)
 		end
 
 		-- ROUND OVER
-		broadcastStatus("🏁 Round Over! Returning to Safe Zone...")
-		clearEggs()
+		broadcast("🏁 Round Over! Deposit your loot!")
 		task.wait(3)
 	end
 end)
 
-print("[ChronosVault] GameManager with multi-shop support loaded ✓")
+print("[ChronosVault] GameManager with Real Steal-the-Egg Core Loop Loaded ✓")
