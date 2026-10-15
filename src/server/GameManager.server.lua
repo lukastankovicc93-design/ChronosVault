@@ -1,11 +1,11 @@
 --[[
     GameManager.server.lua (ServerScriptService)
-    Chronos Vault: Core Game Loop & Steal-the-Egg Mechanics
+    Chronos Vault: Galactic Steal-the-Egg Core Engine
+    - True 3D Egg Models (Official Egg Hunt Mesh + Cosmic Galaxy Skins)
+    - Egg Scatter Mechanic (Sentinels knock loose carried eggs upon tackle!)
     - Backpack carrying system with visual eggs stacked on player's back
-    - Multi-tier egg spawning with smooth floating/bobbing rotation & sparkle auras
-    - The Great Deposit Vault (bank eggs for currency with multipliers)
-    - Full RemoteEvent synchronization (HUD, sounds, floating reward numbers)
-    - Background music player
+    - The Great Deposit Vault (Bank eggs for currency with multipliers)
+    - Sound FX & Full RemoteEvent synchronization
 ]]
 
 local Players           = game:GetService("Players")
@@ -17,7 +17,7 @@ local Config     = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild
 local DataModule = require(script.Parent:WaitForChild("DataStoreModule"))
 
 ------------------------------------------------------------
--- REMOTE EVENTS
+-- REMOTE & BINDABLE EVENTS
 ------------------------------------------------------------
 local function getOrCreateRemote(name)
 	local r = ReplicatedStorage:FindFirstChild(name)
@@ -32,16 +32,22 @@ end
 local BuyUpgradeEvent = getOrCreateRemote("BuyUpgrade")
 local SyncDataEvent   = getOrCreateRemote("SyncData")
 local StatusEvent     = getOrCreateRemote("RoundStatus")
-local EggEffectEvent  = getOrCreateRemote("EggEffect")  -- Floating 3D text / sound
+local EggEffectEvent  = getOrCreateRemote("EggEffect")
+
+local ScatterEvent = ReplicatedStorage:FindFirstChild("ScatterEggs")
+if not ScatterEvent then
+	ScatterEvent = Instance.new("BindableEvent")
+	ScatterEvent.Name = "ScatterEggs"
+	ScatterEvent.Parent = ReplicatedStorage
+end
 
 ------------------------------------------------------------
--- FOLDERS & AUDIO
+-- FOLDERS & AMBIENT MUSIC
 ------------------------------------------------------------
 local eggFolder = workspace:FindFirstChild("EggSpawns") or Instance.new("Folder")
 eggFolder.Name = "EggSpawns"
 eggFolder.Parent = workspace
 
--- Background Music Loop
 local bgMusic = workspace:FindFirstChild("ChronosBGM") or Instance.new("Sound")
 bgMusic.Name = "ChronosBGM"
 bgMusic.SoundId = Config.SOUNDS.MusicLoop
@@ -53,7 +59,7 @@ if not bgMusic.IsPlaying then
 end
 
 ------------------------------------------------------------
--- PLAYER BACKPACK STATE (In-Memory)
+-- PLAYER BACKPACK STATE
 ------------------------------------------------------------
 -- [userId] = { Count = 0, Value = 0, Visuals = {} }
 local playerBackpacks = {}
@@ -72,7 +78,6 @@ local function updateBackpackVisuals(player: Player)
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 
-	-- Clear old attached egg parts
 	for _, part in ipairs(bp.Visuals or {}) do
 		if part and part.Parent then
 			part:Destroy()
@@ -80,17 +85,24 @@ local function updateBackpackVisuals(player: Player)
 	end
 	bp.Visuals = {}
 
-	-- Stack carried eggs vertically on player's back
+	-- Stack 3D carried eggs on back
 	for i = 1, bp.Count do
 		local visualEgg = Instance.new("Part")
 		visualEgg.Name = "CarriedEgg_" .. i
-		visualEgg.Shape = Enum.PartType.Ball
-		visualEgg.Size = Vector3.new(1.1, 1.4, 1.1)
+		visualEgg.Size = Vector3.new(1.0, 1.3, 1.0)
 		visualEgg.Color = Color3.fromRGB(255, 215, 0)
 		visualEgg.Material = Enum.Material.Neon
 		visualEgg.CanCollide = false
 		visualEgg.Massless = true
 		visualEgg.Parent = char
+
+		-- 3D Egg Mesh for carried egg
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.FileMesh
+		mesh.MeshId = Config.EGG_MESH_ID
+		mesh.Scale = Vector3.new(0.9, 1.2, 0.9)
+		mesh.TextureId = Config.GALAXY_TEXTURE
+		mesh.Parent = visualEgg
 
 		local weld = Instance.new("WeldConstraint")
 		visualEgg.CFrame = hrp.CFrame * CFrame.new(0, -0.4 + (i * 1.3), 1.1)
@@ -129,7 +141,6 @@ local function setupPlayer(player: Player)
 		Visuals = {},
 	}
 
-	-- Leaderstats (Visible in player list)
 	local ls = player:FindFirstChild("leaderstats") or Instance.new("Folder")
 	ls.Name = "leaderstats"
 	ls.Parent = player
@@ -152,7 +163,6 @@ local function setupPlayer(player: Player)
 		applyStats(player, player.Character)
 	end
 
-	-- Sync state to client
 	local payload = {
 		Eggs            = data.Eggs,
 		TotalEggs       = data.TotalEggs,
@@ -220,14 +230,56 @@ BuyUpgradeEvent.OnServerEvent:Connect(function(player: Player, upKey: string)
 			Capacity        = getCapacity(player),
 		}
 		SyncDataEvent:FireClient(player, payload)
-
-		-- Play upgrade chime
 		EggEffectEvent:FireClient(player, "PlaySound", Config.SOUNDS.UpgradeBuy, 1.0)
 	end
 end)
 
 ------------------------------------------------------------
--- THE DEPOSIT VAULT HOOK
+-- FORWARD DECLARATION FOR SPAWN EGG
+------------------------------------------------------------
+local spawnEgg
+
+------------------------------------------------------------
+-- EGG SCATTER MECHANIC (When hit by Guardians!)
+------------------------------------------------------------
+ScatterEvent.Event:Connect(function(targetPlayer: Player, scatterCount: number, impactPos: Vector3)
+	local bp = playerBackpacks[targetPlayer.UserId]
+	if not bp or bp.Count <= 0 then return end
+
+	local toDrop = math.min(scatterCount, bp.Count)
+	local valuePerEgg = math.floor(bp.Value / bp.Count)
+	bp.Count = bp.Count - toDrop
+	bp.Value = bp.Value - (valuePerEgg * toDrop)
+
+	updateBackpackVisuals(targetPlayer)
+
+	-- Scatter loose eggs in a burst around player
+	for i = 1, toDrop do
+		local angle = (i / toDrop) * math.pi * 2 + math.random()
+		local dropPos = impactPos + Vector3.new(math.cos(angle) * 7, 2, math.sin(angle) * 7)
+		spawnEgg(dropPos, "Common")
+	end
+
+	-- Alert client & play scatter sound
+	EggEffectEvent:FireClient(targetPlayer, "AttackedScatter", toDrop)
+
+	local data = DataModule.Get(targetPlayer)
+	local payload = {
+		Eggs            = data.Eggs,
+		TotalEggs       = data.TotalEggs,
+		SpeedLevel      = data.SpeedLevel,
+		BackpackLevel   = data.BackpackLevel,
+		MultiplierLevel = data.MultiplierLevel,
+		JumpLevel       = data.JumpLevel,
+		CarriedCount    = bp.Count,
+		CarriedValue    = bp.Value,
+		Capacity        = getCapacity(targetPlayer),
+	}
+	SyncDataEvent:FireClient(targetPlayer, payload)
+end)
+
+------------------------------------------------------------
+-- DEPOSIT VAULT BANK HOOK
 ------------------------------------------------------------
 task.spawn(function()
 	local pad = workspace:WaitForChild("ChronosMap", 15)
@@ -249,7 +301,6 @@ task.spawn(function()
 			local mult = 1 + ((data.MultiplierLevel or 0) * Config.UPGRADES.Multiplier.Increment)
 			local bankedTotal = bp.Value * mult
 
-			-- Credit player
 			DataModule.AddEggs(player, bankedTotal)
 			data = DataModule.Get(player)
 
@@ -258,17 +309,14 @@ task.spawn(function()
 			bp.Value = 0
 			updateBackpackVisuals(player)
 
-			-- Update leaderstats
 			local ls = player:FindFirstChild("leaderstats")
 			if ls then
 				if ls:FindFirstChild("Eggs") then ls.Eggs.Value = data.Eggs end
 				if ls:FindFirstChild("Total") then ls.Total.Value = data.TotalEggs end
 			end
 
-			-- Fire client sound & visual burst
 			EggEffectEvent:FireClient(player, "DepositSuccess", bankedTotal, depositedCount)
 
-			-- Full sync
 			local payload = {
 				Eggs            = data.Eggs,
 				TotalEggs       = data.TotalEggs,
@@ -289,29 +337,28 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------
--- JUICY EGG SPAWN & ANIMATION ENGINE
+-- TRUE 3D EGG SPAWN & SINE-WAVE ANIMATION
 ------------------------------------------------------------
 local function pickRandomTier()
 	local roll = math.random(1, 100)
-	if roll <= 60 then
+	if roll <= 55 then
 		return "Common"
-	elseif roll <= 85 then
+	elseif roll <= 83 then
 		return "Silver"
-	elseif roll <= 97 then
+	elseif roll <= 96 then
 		return "Gold"
 	else
 		return "Chronos"
 	end
 end
 
-local function spawnEgg(pos: Vector3, forcedTier: string?)
+spawnEgg = function(pos: Vector3, forcedTier: string?)
 	local tierKey = forcedTier or pickRandomTier()
 	local tierDef = Config.EGG_TIERS[tierKey]
 
 	local egg = Instance.new("Part")
 	egg.Name = "Egg_" .. tierKey
-	egg.Shape = Enum.PartType.Ball
-	egg.Size = tierDef.Size
+	egg.Size = Vector3.new(2, 2.8, 2)
 	egg.Position = pos
 	egg.Anchored = true
 	egg.CanCollide = false
@@ -319,27 +366,35 @@ local function spawnEgg(pos: Vector3, forcedTier: string?)
 	egg.Material = Enum.Material.Neon
 	egg.Parent = eggFolder
 
+	-- Authentic 3D Roblox Egg Hunt Mesh + Cosmic Texture!
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.FileMesh
+	mesh.MeshId = Config.EGG_MESH_ID
+	mesh.TextureId = Config.GALAXY_TEXTURE
+	mesh.Scale = tierDef.Scale
+	mesh.Parent = egg
+
 	-- PointLight Aura
 	local light = Instance.new("PointLight")
 	light.Color = tierDef.Color
-	light.Range = (tierKey == "Chronos") and 18 or 10
-	light.Brightness = 2.5
+	light.Range = (tierKey == "Chronos") and 20 or 12
+	light.Brightness = 3
 	light.Parent = egg
 
-	-- Sparkle Particles
+	-- Cosmic Stardust Particles
 	local pe = Instance.new("ParticleEmitter")
 	pe.Color = tierDef.ParticleClr
-	pe.Size = NumberSequence.new(0.5, 0.1)
-	pe.Lifetime = NumberRange.new(0.8, 1.4)
-	pe.Rate = (tierKey == "Chronos") and 30 or 12
-	pe.Speed = NumberRange.new(2, 5)
+	pe.Size = NumberSequence.new(0.6, 0.1)
+	pe.Lifetime = NumberRange.new(0.8, 1.5)
+	pe.Rate = (tierKey == "Chronos") and 35 or 14
+	pe.Speed = NumberRange.new(2, 6)
 	pe.SpreadAngle = Vector2.new(180, 180)
 	pe.Parent = egg
 
-	-- 3D Name Tag above Egg
+	-- 3D Name Tag
 	local bg = Instance.new("BillboardGui")
-	bg.Size = UDim2.new(0, 150, 0, 40)
-	bg.StudsOffset = Vector3.new(0, tierDef.Size.Y + 0.8, 0)
+	bg.Size = UDim2.new(0, 160, 0, 42)
+	bg.StudsOffset = Vector3.new(0, tierDef.Scale.Y * 2.2 + 0.8, 0)
 	bg.AlwaysOnTop = false
 	bg.Adornee = egg
 	bg.Parent = egg
@@ -354,7 +409,7 @@ local function spawnEgg(pos: Vector3, forcedTier: string?)
 	tl.Text = tierDef.Name
 	tl.Parent = bg
 
-	-- Smooth Floating / Bobbing & Rotating animation
+	-- Smooth Sine-Wave Bobbing & 360° Galactic Spin
 	local basePosY = pos.Y
 	local startTime = tick() + math.random() * 5
 	local rotConnection
@@ -380,7 +435,6 @@ local function spawnEgg(pos: Vector3, forcedTier: string?)
 		local maxCap = getCapacity(player)
 
 		if bp and bp.Count >= maxCap then
-			-- Alert Backpack Full!
 			EggEffectEvent:FireClient(player, "BackpackFull")
 			return
 		end
@@ -388,12 +442,10 @@ local function spawnEgg(pos: Vector3, forcedTier: string?)
 		collected = true
 		rotConnection:Disconnect()
 
-		-- Add to carried backpack
 		bp.Count += 1
 		bp.Value += tierDef.Value
 		updateBackpackVisuals(player)
 
-		-- Fire juicy client effects
 		EggEffectEvent:FireClient(player, "EggCollected", tierDef.Name, tierDef.Value, tierDef.SoundPitch, egg.Position)
 
 		local data = DataModule.Get(player)
@@ -410,10 +462,9 @@ local function spawnEgg(pos: Vector3, forcedTier: string?)
 		}
 		SyncDataEvent:FireClient(player, payload)
 
-		-- Juicy Pop & Shrink Tween
 		pe:Emit(25)
-		light.Brightness = 6
-		local tw = TweenService:Create(egg, TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+		light.Brightness = 7
+		local tw = TweenService:Create(egg, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
 			Size = Vector3.new(0.1, 0.1, 0.1),
 			Transparency = 1,
 		})
@@ -431,7 +482,7 @@ local function spawnArenaEggs()
 		child:Destroy()
 	end
 
-	-- 1. Standard Arena Eggs
+	-- Standard Arena Eggs
 	for _ = 1, Config.EGGS_PER_ROUND do
 		local pos = Vector3.new(
 			math.random(-75, 75),
@@ -441,7 +492,7 @@ local function spawnArenaEggs()
 		spawnEgg(pos)
 	end
 
-	-- 2. Tower Tops (High value guaranteed)
+	-- Tower Tops (Guaranteed Gold)
 	local towerTops = {
 		Vector3.new(62, 14, 62),
 		Vector3.new(-62, 14, 62),
@@ -452,13 +503,13 @@ local function spawnArenaEggs()
 		spawnEgg(tPos, "Gold")
 	end
 
-	-- 3. Central Core Pedestal (Legendary Chronos Egg)
+	-- Center Vortex (Legendary Galactic Chronos Egg)
 	local corePos = Config.VAULT_CORE_POS + Vector3.new(0, 7.5, 0)
 	spawnEgg(corePos, "Chronos")
 end
 
 ------------------------------------------------------------
--- ROUND CYCLE
+-- ROUND LOOP
 ------------------------------------------------------------
 local function broadcast(msg)
 	StatusEvent:FireAllClients(msg)
@@ -466,24 +517,20 @@ end
 
 task.spawn(function()
 	while true do
-		-- INTERMISSION
 		broadcast("⏳ Intermission... Upgrade & Deposit at Bank!")
 		task.wait(Config.INTERMISSION)
 
-		-- ROUND START
-		broadcast("🚨 VAULT BREACH! Steal eggs & escape to the Bank!")
+		broadcast("🚨 VAULT BREACH! Sentinels Awakened! Steal the eggs!")
 		spawnArenaEggs()
 
-		-- COUNTDOWN
 		for t = Config.ROUND_DURATION, 1, -1 do
-			broadcast("⚡ Time Left: " .. t .. "s | Return to Bank!")
+			broadcast("⚡ Time Left: " .. t .. "s | Evade Sentinels & Bank!")
 			task.wait(1)
 		end
 
-		-- ROUND OVER
 		broadcast("🏁 Round Over! Deposit your loot!")
 		task.wait(3)
 	end
 end)
 
-print("[ChronosVault] GameManager with Real Steal-the-Egg Core Loop Loaded ✓")
+print("[ChronosVault] Galactic GameManager with 3D Egg Mesh & Scatter System Loaded ✓")

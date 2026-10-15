@@ -554,6 +554,15 @@ EggEffectEvent.OnClientEvent:Connect(function(action, arg1, arg2, arg3, arg4)
 			spawnFloatingText("⚠️ BACKPACK FULL! GO TO BANK!", Color3.fromRGB(255, 60, 80), hrp.Position)
 		end
 
+	elseif action == "AttackedScatter" then
+		local droppedCount = arg1 or 1
+		playSnd(Config.SOUNDS.EnemyAttack, 0.9)
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			spawnFloatingText("💥 TACKLED BY GUARDIAN! -" .. droppedCount .. " EGGS DROPPED!", Color3.fromRGB(255, 40, 60), hrp.Position)
+		end
+
 	elseif action == "PlaySound" then
 		playSnd(arg1, arg2)
 	end

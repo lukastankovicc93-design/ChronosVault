@@ -1,77 +1,71 @@
 --[[
     LightingSetup.server.lua (ServerScriptService)
-    Transforms flat default lighting into a high-end, vibrant, stylized sci-fi aesthetic:
-    - ShadowMap / Future technology with crisp shadows
-    - Custom ColorCorrection for vivid arcade saturation & punchy contrast
-    - Bloom for dazzling neon reflections & egg auras
-    - Cyber atmosphere with subtle haze
+    Cosmic Galactic Atmosphere:
+    - Deep Space Nebula Skybox with authentic high-res space textures
+    - Future/ShadowMap technology with sharp neon rim lighting
+    - Cosmic ColorCorrection for vibrant galaxy purples, cyans, and golds
+    - High-intensity Bloom for pulsing Chronos lasers and egg auras
 ]]
 
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
--- 1. Base lighting technology & atmosphere
+-- 1. Base Lighting Properties
 Lighting.Technology = Enum.Technology.ShadowMap
-Lighting.ClockTime = 15.0
-Lighting.GeographicLatitude = 35
-Lighting.Brightness = 2.4
-Lighting.Ambient = Color3.fromRGB(70, 75, 95)
-Lighting.OutdoorAmbient = Color3.fromRGB(110, 120, 150)
-Lighting.ShadowSoftness = 0.2
+Lighting.ClockTime = 0.5  -- Midnight space ambience
+Lighting.Brightness = 1.8
+Lighting.Ambient = Color3.fromRGB(45, 35, 65)
+Lighting.OutdoorAmbient = Color3.fromRGB(80, 70, 115)
+Lighting.ShadowSoftness = 0.15
 Lighting.GlobalShadows = true
 
--- 2. Clear out any existing effects
+-- 2. Cleanup previous effects
 for _, child in ipairs(Lighting:GetChildren()) do
 	if child:IsA("PostProcessEffect") or child:IsA("Atmosphere") or child:IsA("Sky") then
 		child:Destroy()
 	end
 end
 
--- 3. Vivid ColorCorrection (Arcade/Simulator Pop)
-local cc = Instance.new("ColorCorrectionEffect")
-cc.Name = "ChronosColorCorrection"
-cc.Brightness = 0.04
-cc.Contrast = 0.22
-cc.Saturation = 0.40
-cc.TintColor = Color3.fromRGB(250, 245, 255)
-cc.Parent = Lighting
-
--- 4. Bloom Effect (Pulsing Neon Lights & Eggs)
-local bloom = Instance.new("BloomEffect")
-bloom.Name = "ChronosBloom"
-bloom.Intensity = 0.75
-bloom.Size = 22
-bloom.Threshold = 0.82
-bloom.Parent = Lighting
-
--- 5. Sun Rays
-local sunRays = Instance.new("SunRaysEffect")
-sunRays.Name = "ChronosSunRays"
-sunRays.Intensity = 0.18
-sunRays.Spread = 0.85
-sunRays.Parent = Lighting
-
--- 6. Modern Atmosphere
-local atmosphere = Instance.new("Atmosphere")
-atmosphere.Name = "ChronosAtmosphere"
-atmosphere.Density = 0.28
-atmosphere.Offset = 0.25
-atmosphere.Color = Color3.fromRGB(160, 190, 240)
-atmosphere.Decay = Color3.fromRGB(80, 100, 160)
-atmosphere.Glare = 0.2
-atmosphere.Haze = 1.2
-atmosphere.Parent = Lighting
-
--- 7. High-tech Skybox (Deep Blue & Starry)
+-- 3. Galactic Purple/Pink Nebula Skybox
 local sky = Instance.new("Sky")
-sky.Name = "ChronosSky"
-sky.SkyboxBk = "rbxassetid://600830446"
-sky.SkyboxDn = "rbxassetid://600831635"
-sky.SkyboxFt = "rbxassetid://600832720"
-sky.SkyboxLf = "rbxassetid://600834110"
-sky.SkyboxRt = "rbxassetid://600835177"
-sky.SkyboxUp = "rbxassetid://600836162"
-sky.StarCount = 4500
+sky.Name = "GalacticNebulaSky"
+sky.SkyboxBk = Config.SKYBOX.Bk
+sky.SkyboxDn = Config.SKYBOX.Dn
+sky.SkyboxFt = Config.SKYBOX.Ft
+sky.SkyboxLf = Config.SKYBOX.Lf
+sky.SkyboxRt = Config.SKYBOX.Rt
+sky.SkyboxUp = Config.SKYBOX.Up
+sky.StarCount = 5000
 sky.CelestialBodiesShown = true
 sky.Parent = Lighting
 
-print("[ChronosVault] Advanced AAA Lighting Applied ✓")
+-- 4. Cosmic ColorCorrection
+local cc = Instance.new("ColorCorrectionEffect")
+cc.Name = "GalacticColorCorrection"
+cc.Brightness = 0.05
+cc.Contrast = 0.28
+cc.Saturation = 0.45
+cc.TintColor = Color3.fromRGB(240, 230, 255)
+cc.Parent = Lighting
+
+-- 5. Radiant Bloom (Pulsing Eggs & Lasers)
+local bloom = Instance.new("BloomEffect")
+bloom.Name = "GalacticBloom"
+bloom.Intensity = 0.9
+bloom.Size = 25
+bloom.Threshold = 0.8
+bloom.Parent = Lighting
+
+-- 6. Space Atmosphere
+local atmosphere = Instance.new("Atmosphere")
+atmosphere.Name = "GalacticAtmosphere"
+atmosphere.Density = 0.22
+atmosphere.Offset = 0.3
+atmosphere.Color = Color3.fromRGB(130, 90, 200)
+atmosphere.Decay = Color3.fromRGB(60, 30, 110)
+atmosphere.Glare = 0.4
+atmosphere.Haze = 1.5
+atmosphere.Parent = Lighting
+
+print("[ChronosVault] Galactic Skybox & Cosmic Lighting Applied ✓")
