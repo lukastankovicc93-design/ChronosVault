@@ -1,10 +1,11 @@
 --[[
-    DataStoreModule (ServerScriptService)
-    Handles player data persistence with:
+    DataStoreModule.lua (ServerScriptService)
+    Robust persistent storage for Chronos Vault with:
+    - Multi-stat tracking (Eggs, TotalEggs, Speed, Multiplier, Jump, Magnet)
     - pcall wrapping + exponential backoff
-    - UpdateAsync for concurrency safety
-    - BindToClose for safe shutdown saves
-    - Periodic auto-save
+    - UpdateAsync safe cloud concurrency
+    - BindToClose parallel shutdown saving
+    - Periodic auto-save loop
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -17,7 +18,7 @@ local DataStore = DataStoreService:GetDataStore(Config.DATA_STORE_NAME)
 
 local DataModule = {}
 
--- In-memory cache: [userId] = { Eggs = 0, SpeedLevel = 0, TotalEggs = 0 }
+-- In-memory cache: [userId] = PlayerData
 local playerCache = {}
 
 ------------------------------------------------------------
@@ -25,14 +26,31 @@ local playerCache = {}
 ------------------------------------------------------------
 local function getDefaultData()
 	return {
-		Eggs       = 0,
-		SpeedLevel = 0,
-		TotalEggs  = 0,
+		Eggs            = 0,
+		TotalEggs       = 0,
+		SpeedLevel      = 0,
+		MultiplierLevel = 0,
+		JumpLevel       = 0,
+		MagnetLevel     = 0,
 	}
 end
 
+-- Reconcile loaded data with default fields (in case new upgrades were added)
+local function reconcile(loaded)
+	local defaults = getDefaultData()
+	if type(loaded) ~= "table" then
+		return defaults
+	end
+	for key, val in pairs(defaults) do
+		if loaded[key] == nil then
+			loaded[key] = val
+		end
+	end
+	return loaded
+end
+
 ------------------------------------------------------------
--- SAFE GET WITH RETRIES
+-- RETRY HELPERS
 ------------------------------------------------------------
 local function safeGet(key)
 	local attempts = 0
@@ -43,16 +61,13 @@ local function safeGet(key)
 			return DataStore:GetAsync(key)
 		end)
 		if not success then
-			warn("[DataModule] GetAsync failed attempt " .. attempts .. ": " .. tostring(result))
+			warn("[DataModule] GetAsync failed (attempt " .. attempts .. "): " .. tostring(result))
 			task.wait(2 ^ attempts)
 		end
 	until success or attempts >= 4
 	return success, result
 end
 
-------------------------------------------------------------
--- SAFE SAVE WITH UpdateAsync
-------------------------------------------------------------
 local function safeSave(key, data)
 	local attempts = 0
 	local success, err
@@ -64,7 +79,7 @@ local function safeSave(key, data)
 			end)
 		end)
 		if not success then
-			warn("[DataModule] UpdateAsync failed attempt " .. attempts .. ": " .. tostring(err))
+			warn("[DataModule] UpdateAsync failed (attempt " .. attempts .. "): " .. tostring(err))
 			task.wait(2 ^ attempts)
 		end
 	until success or attempts >= 4
@@ -72,7 +87,7 @@ local function safeSave(key, data)
 end
 
 ------------------------------------------------------------
--- PUBLIC API
+-- PUBLIC METHODS
 ------------------------------------------------------------
 
 function DataModule.Load(player: Player)
@@ -80,7 +95,7 @@ function DataModule.Load(player: Player)
 	local success, data = safeGet(key)
 
 	if success and data then
-		playerCache[player.UserId] = data
+		playerCache[player.UserId] = reconcile(data)
 	else
 		playerCache[player.UserId] = getDefaultData()
 	end
@@ -101,6 +116,7 @@ function DataModule.AddEggs(player: Player, amount: number)
 	d.Eggs      = d.Eggs + amount
 	d.TotalEggs = d.TotalEggs + amount
 	playerCache[player.UserId] = d
+	return d
 end
 
 function DataModule.SpendEggs(player: Player, amount: number): boolean
@@ -139,7 +155,7 @@ task.spawn(function()
 end)
 
 ------------------------------------------------------------
--- BIND TO CLOSE (parallel saves on shutdown)
+-- SHUTDOWN SAVE (BindToClose)
 ------------------------------------------------------------
 game:BindToClose(function()
 	if RunService:IsStudio() then
@@ -153,7 +169,7 @@ game:BindToClose(function()
 			DataModule.Save(player)
 		end))
 	end
-	task.wait(10)  -- give saves time to complete
+	task.wait(10)
 end)
 
 return DataModule
