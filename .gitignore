@@ -1,0 +1,15 @@
+# Dependencies
+*.lock
+
+# Roblox
+*.rbxlx
+*.rbxl
+*.rbxm
+
+# OS
+Thumbs.db
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
