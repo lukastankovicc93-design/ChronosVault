@@ -21,6 +21,327 @@
       "$className": "Workspace",
       "EggSpawns": {
         "$className": "Folder"
+      },
+      "ChronosMap": {
+        "$className": "Folder",
+        "Lobby": {
+          "$className": "Folder",
+          "LobbyFloor": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [130, 4, 80],
+              "Position": [0, 16, -135],
+              "Anchored": true,
+              "Color": [0.08, 0.06, 0.14]
+            }
+          },
+          "DepositPad": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [20, 1, 20],
+              "Position": [0, 18.5, -115],
+              "Anchored": true,
+              "Color": [1, 0.84, 0]
+            }
+          },
+          "RebirthAltar": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [14, 3, 14],
+              "Position": [48, 17.5, -145],
+              "Anchored": true,
+              "Color": [1, 0.2, 0.8]
+            }
+          },
+          "SpeedShop": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [16, 5, 8],
+              "Position": [-48, 18.5, -145],
+              "Anchored": true,
+              "Color": [0, 0.85, 1]
+            }
+          },
+          "PerksShop": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [16, 5, 8],
+              "Position": [-22, 18.5, -113],
+              "Anchored": true,
+              "Color": [1, 0.7, 0]
+            }
+          },
+          "CyberBridge": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [16, 2, 40],
+              "Position": [0, 10, -78],
+              "Anchored": true,
+              "Color": [0.12, 0.1, 0.2]
+            }
+          }
+        },
+        "Plots": {
+          "$className": "Folder",
+          "Plot_1": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [-50, 16, -200],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          },
+          "Plot_2": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [-20, 16, -200],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          },
+          "Plot_3": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [10, 16, -200],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          },
+          "Plot_4": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [40, 16, -200],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          },
+          "Plot_5": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [-35, 16, -230],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          },
+          "Plot_6": {
+            "$className": "Part",
+            "$properties": {
+              "Size": [22, 2, 22],
+              "Position": [25, 16, -230],
+              "Anchored": true,
+              "Color": [0.1, 0.08, 0.18]
+            }
+          }
+        },
+        "Zones": {
+          "$className": "Folder",
+          "Zone1_Stardust": {
+            "$className": "Folder",
+            "Floor": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [110, 4, 110],
+                "Position": [-75, 4, -20],
+                "Anchored": true,
+                "Color": [0.04, 0.08, 0.16]
+              }
+            },
+            "Beacon_NW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-125, 16, -70],
+                "Anchored": true,
+                "Color": [0, 0.85, 1]
+              }
+            },
+            "Beacon_NE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-25, 16, -70],
+                "Anchored": true,
+                "Color": [0, 0.85, 1]
+              }
+            },
+            "Beacon_SW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-125, 16, 30],
+                "Anchored": true,
+                "Color": [0, 0.85, 1]
+              }
+            },
+            "Beacon_SE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-25, 16, 30],
+                "Anchored": true,
+                "Color": [0, 0.85, 1]
+              }
+            }
+          },
+          "Zone2_Solar": {
+            "$className": "Folder",
+            "Floor": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [110, 4, 110],
+                "Position": [75, 4, -20],
+                "Anchored": true,
+                "Color": [0.16, 0.08, 0.02]
+              }
+            },
+            "Beacon_NW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [25, 16, -70],
+                "Anchored": true,
+                "Color": [1, 0.65, 0]
+              }
+            },
+            "Beacon_NE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [125, 16, -70],
+                "Anchored": true,
+                "Color": [1, 0.65, 0]
+              }
+            },
+            "Beacon_SW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [25, 16, 30],
+                "Anchored": true,
+                "Color": [1, 0.65, 0]
+              }
+            },
+            "Beacon_SE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [125, 16, 30],
+                "Anchored": true,
+                "Color": [1, 0.65, 0]
+              }
+            }
+          },
+          "Zone3_Void": {
+            "$className": "Folder",
+            "Floor": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [140, 4, 100],
+                "Position": [0, 6, 85],
+                "Anchored": true,
+                "Color": [0.1, 0.03, 0.18]
+              }
+            },
+            "Beacon_NW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-65, 18, 40],
+                "Anchored": true,
+                "Color": [0.75, 0.2, 1]
+              }
+            },
+            "Beacon_NE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [65, 18, 40],
+                "Anchored": true,
+                "Color": [0.75, 0.2, 1]
+              }
+            },
+            "Beacon_SW": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [-65, 18, 130],
+                "Anchored": true,
+                "Color": [0.75, 0.2, 1]
+              }
+            },
+            "Beacon_SE": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [3, 24, 3],
+                "Position": [65, 18, 130],
+                "Anchored": true,
+                "Color": [0.75, 0.2, 1]
+              }
+            }
+          },
+          "Zone4_Core": {
+            "$className": "Folder",
+            "VaultDais": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [46, 8, 46],
+                "Position": [0, 10, 0],
+                "Anchored": true,
+                "Color": [0.15, 0.05, 0.18]
+              }
+            },
+            "CoreVortex": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [16, 1, 16],
+                "Position": [0, 14.5, 0],
+                "Anchored": true,
+                "Color": [1, 0.1, 0.5]
+              }
+            },
+            "Pillar_1": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [4, 26, 4],
+                "Position": [16, 23, 16],
+                "Anchored": true,
+                "Color": [0, 0.9, 1]
+              }
+            },
+            "Pillar_2": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [4, 26, 4],
+                "Position": [-16, 23, 16],
+                "Anchored": true,
+                "Color": [0, 0.9, 1]
+              }
+            },
+            "Pillar_3": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [4, 26, 4],
+                "Position": [16, 23, -16],
+                "Anchored": true,
+                "Color": [0, 0.9, 1]
+              }
+            },
+            "Pillar_4": {
+              "$className": "Part",
+              "$properties": {
+                "Size": [4, 26, 4],
+                "Position": [-16, 23, -16],
+                "Anchored": true,
+                "Color": [0, 0.9, 1]
+              }
+            }
+          }
+        }
       }
     }
   }
