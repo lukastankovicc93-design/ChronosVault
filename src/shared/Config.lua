@@ -1,50 +1,135 @@
 --[[
     Config.lua (ReplicatedStorage.Shared)
-    Chronos Vault: Galactic Overhaul Configuration
-    - True 3D Egg Mesh assets & Cosmic Galactic Textures
-    - Deep Space Nebula Skybox IDs
-    - Chronos Sentinel Enemy AI settings (Patrol, Chase, Egg Scatter Attack)
-    - Full sound library & gameplay tuning
+    Chronos Vault: Ultimate Multi-Zone & Rebirth Configuration
+    - 4 Tiered Lighted Zones (Common, Rare, Epic, Legendary Core)
+    - 4 Dedicated Zone Guardian Monsters with distinct speeds
+    - Calculated Progression System & Rebirth System
+    - Player Hatchery Plots System
+    - Manual Map Mode Toggle
 ]]
 
 local Config = {}
 
 ------------------------------------------------------------
+-- MANUAL MAP EDITING TOGGLE
+------------------------------------------------------------
+-- If true, server won't rebuild the map if you manually modified it in Studio!
+Config.MANUAL_MAP_MODE     = false
+
+------------------------------------------------------------
 -- ROUND & GAMEPLAY
 ------------------------------------------------------------
-Config.ROUND_DURATION      = 120    -- seconds per round
-Config.INTERMISSION        = 12     -- seconds between rounds
-Config.EGGS_PER_ROUND      = 30     -- total eggs across the arena
-
--- Backpack Carry System
-Config.BASE_CAPACITY       = 3      -- max eggs before banking
-Config.CAPACITY_INCREMENT  = 2      -- +2 capacity per backpack level
+Config.ROUND_DURATION      = 120
+Config.INTERMISSION        = 10
+Config.BASE_CAPACITY       = 3
+Config.CAPACITY_INCREMENT  = 2
 
 ------------------------------------------------------------
--- TRUE 3D EGG MESH & COSMIC TEXTURES
+-- MULTI-ZONE MAP LAYOUT (Expanded & Tiered)
 ------------------------------------------------------------
-Config.EGG_MESH_ID         = "rbxassetid://705225654"  -- Official Roblox Egg Hunt 3D Model
-Config.GALAXY_TEXTURE      = "rbxassetid://171410628"  -- Cosmic Nebula Texture
-
--- Galactic Space Skybox Face Textures
-Config.SKYBOX = {
-	Bk = "rbxassetid://171410628",
-	Dn = "rbxassetid://171410649",
-	Ft = "rbxassetid://171410620",
-	Lf = "rbxassetid://171410666",
-	Rt = "rbxassetid://171410657",
-	Up = "rbxassetid://171410636",
+Config.ZONES = {
+	Zone1 = {
+		Name          = "Stardust Meadows (Tier 1 - Common)",
+		Color         = Color3.fromRGB(0, 210, 255),
+		LightColor    = Color3.fromRGB(0, 180, 255),
+		Center        = Vector3.new(-75, 4, -20),
+		Size          = Vector3.new(110, 4, 110),
+		MinSpeedToRun = 20,
+		EggTiers      = { "Common", "Common", "Common", "Silver" },
+		Monster = {
+			Name            = "🛸 Stardust Drone",
+			Speed           = 19,
+			SightRange      = 38,
+			AttackRange     = 6,
+			ScatterCount    = 1,
+			Color           = Color3.fromRGB(0, 220, 255),
+			Size            = Vector3.new(3, 4, 3),
+		}
+	},
+	Zone2 = {
+		Name          = "Solar Expanse (Tier 2 - Rare)",
+		Color         = Color3.fromRGB(255, 170, 0),
+		LightColor    = Color3.fromRGB(255, 140, 20),
+		Center        = Vector3.new(75, 4, -20),
+		Size          = Vector3.new(110, 4, 110),
+		MinSpeedToRun = 26,
+		EggTiers      = { "Silver", "Silver", "Gold" },
+		Monster = {
+			Name            = "🔥 Solar Fiend",
+			Speed           = 25,
+			SightRange      = 42,
+			AttackRange     = 7,
+			ScatterCount    = 2,
+			Color           = Color3.fromRGB(255, 140, 0),
+			Size            = Vector3.new(4, 5.5, 4),
+		}
+	},
+	Zone3 = {
+		Name          = "Void Nebula (Tier 3 - Epic)",
+		Color         = Color3.fromRGB(180, 50, 255),
+		LightColor    = Color3.fromRGB(190, 40, 255),
+		Center        = Vector3.new(0, 6, 85),
+		Size          = Vector3.new(140, 4, 100),
+		MinSpeedToRun = 33,
+		EggTiers      = { "Silver", "Gold", "Gold", "Chronos" },
+		Monster = {
+			Name            = "🔮 Void Reaper",
+			Speed           = 32,
+			SightRange      = 48,
+			AttackRange     = 8,
+			ScatterCount    = 3,
+			Color           = Color3.fromRGB(190, 40, 255),
+			Size            = Vector3.new(4.5, 6.5, 4.5),
+		}
+	},
+	Zone4 = {
+		Name          = "THE CHRONOS CORE (Tier 4 - Legendary)",
+		Color         = Color3.fromRGB(255, 30, 120),
+		LightColor    = Color3.fromRGB(255, 40, 140),
+		Center        = Vector3.new(0, 14, 0),
+		Size          = Vector3.new(65, 8, 65),
+		MinSpeedToRun = 40,
+		EggTiers      = { "Gold", "Chronos", "Chronos" },
+		Monster = {
+			Name            = "👑 CHRONOS TITAN PRIME",
+			Speed           = 38,
+			SightRange      = 55,
+			AttackRange     = 10,
+			ScatterCount    = 4,
+			Color           = Color3.fromRGB(255, 30, 80),
+			Size            = Vector3.new(6, 9, 6),
+		}
+	},
 }
 
 ------------------------------------------------------------
--- EGG TIERS (Cosmic Galactic Editions)
+-- REBIRTH PROGRESSION SYSTEM
 ------------------------------------------------------------
+Config.REBIRTH = {
+	BaseEggCost       = 100,     -- Cost for Rebirth 1
+	CostMultiplier    = 2.5,     -- Multiplier per rebirth
+	SpeedReqBase      = 4,       -- Requires Speed Level 4 for Rebirth 1
+	SpeedReqInc       = 1,       -- +1 Speed Level required per rebirth
+	MultiplierPerReb  = 1.5,     -- +150% Egg Value per Rebirth (Permanent)
+}
+
+function Config.GetRebirthCost(currentRebirths)
+	local cost = math.floor(Config.REBIRTH.BaseEggCost * (Config.REBIRTH.CostMultiplier ^ currentRebirths))
+	local speedReq = Config.REBIRTH.SpeedReqBase + (currentRebirths * Config.REBIRTH.SpeedReqInc)
+	return cost, speedReq
+end
+
+------------------------------------------------------------
+-- EGG TIERS & 3D MESH
+------------------------------------------------------------
+Config.EGG_MESH_ID         = "rbxassetid://705225654"
+Config.GALAXY_TEXTURE      = "rbxassetid://171410628"
+
 Config.EGG_TIERS = {
 	Common = {
 		Name        = "Stardust Egg",
 		Color       = Color3.fromRGB(120, 200, 255),
 		Value       = 1,
-		Weight      = 55,
 		Scale       = Vector3.new(1.1, 1.4, 1.1),
 		ParticleClr = ColorSequence.new(Color3.fromRGB(100, 220, 255), Color3.fromRGB(200, 150, 255)),
 		SoundPitch  = 1.0,
@@ -53,7 +138,6 @@ Config.EGG_TIERS = {
 		Name        = "Supernova Egg",
 		Color       = Color3.fromRGB(180, 100, 255),
 		Value       = 4,
-		Weight      = 28,
 		Scale       = Vector3.new(1.3, 1.7, 1.3),
 		ParticleClr = ColorSequence.new(Color3.fromRGB(220, 100, 255), Color3.fromRGB(0, 255, 255)),
 		SoundPitch  = 1.18,
@@ -61,18 +145,16 @@ Config.EGG_TIERS = {
 	Gold = {
 		Name        = "Solar Flare Egg",
 		Color       = Color3.fromRGB(255, 200, 40),
-		Value       = 12,
-		Weight      = 13,
-		Scale       = Vector3.new(1.5, 2.0, 1.5),
+		Value       = 14,
+		Scale       = Vector3.new(1.6, 2.1, 1.6),
 		ParticleClr = ColorSequence.new(Color3.fromRGB(255, 220, 50), Color3.fromRGB(255, 80, 0)),
 		SoundPitch  = 1.35,
 	},
 	Chronos = {
 		Name        = "🌌 GALACTIC CHRONOS EGG",
 		Color       = Color3.fromRGB(255, 40, 200),
-		Value       = 50,
-		Weight      = 4,
-		Scale       = Vector3.new(2.2, 2.9, 2.2),
+		Value       = 60,
+		Scale       = Vector3.new(2.4, 3.2, 2.4),
 		ParticleClr = ColorSequence.new({
 			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 0, 180)),
 			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
@@ -83,96 +165,64 @@ Config.EGG_TIERS = {
 }
 
 ------------------------------------------------------------
--- ENEMY CHRONOS SENTINELS (Egg Guardians)
+-- PLAYER HATCHERY PLOTS
 ------------------------------------------------------------
-Config.ENEMIES = {
-	CentralGuardian = {
-		Name            = "👑 Chronos Titan",
-		Size            = Vector3.new(5, 7, 5),
-		WalkSpeed       = 24,
-		SightRange      = 45,
-		AttackRange     = 8,
-		AttackCooldown  = 2.0,
-		KnockbackPower  = 65,
-		EggScatterCount = 3, -- Drops up to 3 carried eggs!
-		Color           = Color3.fromRGB(255, 40, 80),
-		PatrolRadius    = 25,
-		SpawnPos        = Vector3.new(0, 12, 0), -- Central Vault
-	},
-	PatrolDroneA = {
-		Name            = "🛸 Vault Sentinel Alpha",
-		Size            = Vector3.new(3.5, 4.5, 3.5),
-		WalkSpeed       = 20,
-		SightRange      = 38,
-		AttackRange     = 6,
-		AttackCooldown  = 1.8,
-		KnockbackPower  = 50,
-		EggScatterCount = 2,
-		Color           = Color3.fromRGB(255, 120, 0),
-		PatrolRadius    = 55,
-		SpawnPos        = Vector3.new(45, 6, 45),
-	},
-	PatrolDroneB = {
-		Name            = "🛸 Vault Sentinel Beta",
-		Size            = Vector3.new(3.5, 4.5, 3.5),
-		WalkSpeed       = 20,
-		SightRange      = 38,
-		AttackRange     = 6,
-		AttackCooldown  = 1.8,
-		KnockbackPower  = 50,
-		EggScatterCount = 2,
-		Color           = Color3.fromRGB(0, 200, 255),
-		PatrolRadius    = 55,
-		SpawnPos        = Vector3.new(-45, 6, -45),
-	},
+Config.MAX_PLOTS = 6
+Config.HATCH_COST = 10 -- Eggs needed to hatch
+Config.HATCH_REWARDS = {
+	MinCoins = 25,
+	MaxCoins = 150,
 }
 
 ------------------------------------------------------------
--- AUDIO SFX
+-- AUDIO
 ------------------------------------------------------------
 Config.SOUNDS = {
-	EggPickup   = "rbxassetid://9069609200",  -- Chime / pop
-	DepositBank = "rbxassetid://9069609268",  -- Big coin cascade
-	UpgradeBuy  = "rbxassetid://9069609074",  -- Fanfare / level up
-	JumpPad     = "rbxassetid://9114223170",  -- Kinetic whoosh
-	BackpackFull= "rbxassetid://9069609124",  -- Alert buzzer
-	EnemyAlert  = "rbxassetid://9069609124",  -- Sentinel alarm / target acquired
-	EnemyAttack = "rbxassetid://9114223170",  -- Tackle / impact blast
-	MusicLoop   = "rbxassetid://9043887091",  -- Ambient synthwave loop
+	EggPickup   = "rbxassetid://9069609200",
+	DepositBank = "rbxassetid://9069609268",
+	UpgradeBuy  = "rbxassetid://9069609074",
+	JumpPad     = "rbxassetid://9114223170",
+	BackpackFull= "rbxassetid://9069609124",
+	EnemyAlert  = "rbxassetid://9069609124",
+	EnemyAttack = "rbxassetid://9114223170",
+	RebirthSFX  = "rbxassetid://9069609074",
+	HatchCrack  = "rbxassetid://9069609200",
+	HatchBurst  = "rbxassetid://9069609268",
+	MusicLoop   = "rbxassetid://9043887091",
 }
 
 ------------------------------------------------------------
--- UPGRADES & BALANCING
+-- UPGRADES (Rebalanced for Speed Progression)
 ------------------------------------------------------------
 Config.UPGRADES = {
 	Speed = {
 		DisplayName   = "Hyper Speed",
 		Icon          = "⚡",
 		BaseValue     = 18,
-		Increment     = 4,
-		MaxLevel      = 10,
+		Increment     = 3,
+		MaxLevel      = 12, -- Max WalkSpeed = 18 + 36 = 54! Can outrun all monsters
 		BaseCost      = 6,
-		CostMult      = 1.5,
-		Description   = "+4 WalkSpeed to outrun Sentinels",
+		CostMult      = 1.45,
+		Description   = "+3 WalkSpeed to outpace zone guardians",
 	},
 	Backpack = {
 		DisplayName   = "Cosmic Backpack",
 		Icon          = "🎒",
 		BaseValue     = 3,
 		Increment     = 2,
-		MaxLevel      = 6,
+		MaxLevel      = 8,
 		BaseCost      = 10,
-		CostMult      = 1.7,
+		CostMult      = 1.65,
 		Description   = "+2 Egg carry capacity before banking",
 	},
 	Multiplier = {
-		DisplayName   = "Galactic Multiplier",
+		DisplayName   = "Vault Multiplier",
 		Icon          = "💎",
 		BaseValue     = 1,
 		Increment     = 1,
-		MaxLevel      = 5,
+		MaxLevel      = 6,
 		BaseCost      = 18,
-		CostMult      = 2.2,
+		CostMult      = 2.1,
 		Description   = "+1x multiplier on all deposited eggs",
 	},
 	Jump = {
@@ -183,7 +233,7 @@ Config.UPGRADES = {
 		MaxLevel      = 5,
 		BaseCost      = 12,
 		CostMult      = 1.6,
-		Description   = "+10 JumpPower to leap over Guardians",
+		Description   = "+10 JumpPower for high vault areas",
 	},
 }
 
@@ -195,15 +245,7 @@ function Config.GetCost(upgradeType, currentLevel)
 	return math.floor(up.BaseCost * (up.CostMult ^ currentLevel))
 end
 
-------------------------------------------------------------
--- MAP POSITIONS
-------------------------------------------------------------
-Config.LOBBY_CENTER        = Vector3.new(0, 16, -135)
-Config.VAULT_DEPOSIT_POS   = Vector3.new(0, 16.5, -115)
-Config.ARENA_CENTER        = Vector3.new(0, 0, 0)
-Config.VAULT_CORE_POS      = Vector3.new(0, 12, 0)
-
-Config.DATA_STORE_NAME     = "ChronosVault_Galactic_v4"
+Config.DATA_STORE_NAME     = "ChronosVault_Rebirth_v5"
 Config.AUTO_SAVE_INTERVAL  = 120
 
 return Config

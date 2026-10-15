@@ -1,9 +1,9 @@
 --[[
     DataStoreModule.lua (ServerScriptService)
-    Robust data persistence for Chronos Vault:
-    - Stores Eggs, TotalEggs, SpeedLevel, BackpackLevel, MultiplierLevel, JumpLevel
-    - Exponential backoff retries & UpdateAsync concurrency safety
-    - Auto-save + BindToClose safe shutdown handling
+    Persistence Engine for Chronos Vault:
+    - Stores Eggs, TotalEggs, Rebirths, HatchedEggs, SpeedLevel, BackpackLevel, MultiplierLevel, JumpLevel
+    - Rebirth transaction logic with requirement validation & stat resets
+    - Concurrency safety with UpdateAsync, retries, and BindToClose
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -21,6 +21,8 @@ local function getDefaultData()
 	return {
 		Eggs            = 0,
 		TotalEggs       = 0,
+		Rebirths        = 0,
+		HatchedEggs     = 0,
 		SpeedLevel      = 0,
 		BackpackLevel   = 0,
 		MultiplierLevel = 0,
@@ -107,6 +109,23 @@ function DataModule.SpendEggs(player: Player, amount: number): boolean
 	if d.Eggs >= amount then
 		d.Eggs = d.Eggs - amount
 		playerCache[player.UserId] = d
+		return true
+	end
+	return false
+end
+
+-- Rebirth Transaction
+function DataModule.PerformRebirth(player: Player): boolean
+	local d = DataModule.Get(player)
+	local currentRebirths = d.Rebirths or 0
+	local cost, speedReq = Config.GetRebirthCost(currentRebirths)
+
+	if d.Eggs >= cost and d.SpeedLevel >= speedReq then
+		d.Eggs = 0
+		d.SpeedLevel = 0
+		d.Rebirths = currentRebirths + 1
+		playerCache[player.UserId] = d
+		DataModule.Save(player)
 		return true
 	end
 	return false
